@@ -82,6 +82,15 @@ def get_portfolios(user_id, role="retail_user"):
     return [dict(r) for r in rows]
 
 
+def clear_all_portfolios():
+    """Clear all portfolios and holdings — users start fresh each session."""
+    conn = get_db()
+    conn.execute("DELETE FROM holdings")
+    conn.execute("DELETE FROM portfolios")
+    conn.commit()
+    conn.close()
+
+
 def create_sample_portfolio(user_id):
     """Create default JSE portfolio."""
     pid = create_portfolio(user_id, "JSE Sample Portfolio", "Default JSE Top 40 sample", "sample")

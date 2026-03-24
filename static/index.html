@@ -970,16 +970,84 @@ CTS['kde-chart']=new Chart(cv,{type:'scatter',data:{datasets},options:{responsiv
 // === INTELLIGENCE ===
 function vIntel(ct){
 const it=DT.intelligence||{},rec=it.recommendation||{};
-ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'InteliRisk v4 Intelligence Report'),el('span',{cl:'cd-b',st:{background:it.color||'var(--ac)',color:'var(--b0)'}},it.level||'')),el('div',{st:{fontSize:'12px',fontWeight:'600',lineHeight:'1.6',marginBottom:'10px'}},it.headline||''),
-el('div',{cl:'g5',st:{gap:'6px'}},
-el('div',{st:{background:'var(--b0)',borderRadius:'5px',padding:'8px'}},el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase'}},'REGIME'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:RCLR[it.active_regime]||'var(--t1)'}},it.active_regime||'—')),
+const aiSrc=it.ai_source||'Rule Engine';
+const hmmF=it.hmm_features||0;
+const regDur=it.regime_duration||0;
+
+// Header with AI source badge
+ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'InteliRisk v4 Intelligence Report'),
+el('span',{st:{fontSize:'8px',padding:'2px 8px',borderRadius:'10px',background:'rgba(212,151,58,.15)',color:'var(--ac)',marginLeft:'8px',fontFamily:'JetBrains Mono'}},aiSrc),
+el('span',{cl:'cd-b',st:{background:it.color||'var(--ac)',color:'var(--b0)'}},it.level||'')),
+el('div',{st:{fontSize:'12px',fontWeight:'600',lineHeight:'1.6',marginBottom:'10px'}},it.headline||''),
+
+// KPI row — 6 metrics
+el('div',{st:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:'6px',marginBottom:'10px'}},
+el('div',{st:{background:'var(--b0)',borderRadius:'5px',padding:'8px'}},el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase'}},'REGIME'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:RCLR[it.active_regime]||'var(--t1)'}},it.active_regime||'—'),el('div',{st:{fontSize:'7px',color:'var(--t3)'}},regDur+'d duration')),
 el('div',{st:{background:'var(--b0)',borderRadius:'5px',padding:'8px'}},el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase'}},'CRISIS PROB'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:it.crisis_probability>0.3?'var(--rd)':'var(--gn)'}},((it.crisis_probability||0)*100).toFixed(0)+'%')),
-el('div',{st:{background:'var(--b0)',borderRadius:'5px',padding:'8px'}},el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase'}},'HERDING'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:it.herding?.detected?'var(--rd)':'var(--gn)'}},it.herding?.level||'None')),
+el('div',{st:{background:'var(--b0)',borderRadius:'5px',padding:'8px'}},el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase'}},'HMM FEATURES'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:'var(--bl)'}},hmmF)),
+el('div',{st:{background:'var(--b0)',borderRadius:'5px',padding:'8px'}},el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase'}},'HERDING'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:it.herding?.detected?'var(--rd)':'var(--gn)'}},it.herding?.level||'None'),el('div',{st:{fontSize:'7px',color:'var(--t3)'}},it.herding?.n_stocks?it.herding.n_stocks+' stocks':'')),
 el('div',{st:{background:'var(--b0)',borderRadius:'5px',padding:'8px'}},el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase'}},'SHOCK TYPE'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:'var(--or)'}},it.shock_classification||'—')),
-el('div',{st:{background:'rgba(212,151,58,.08)',borderRadius:'5px',padding:'8px',border:'1px solid rgba(212,151,58,.1)'}},el('div',{st:{fontSize:'7px',color:'var(--ac)',textTransform:'uppercase'}},'POSTURE'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:'var(--ac)'}},rec.posture||'—')))));
+el('div',{st:{background:'rgba(212,151,58,.08)',borderRadius:'5px',padding:'8px',border:'1px solid rgba(212,151,58,.1)'}},el('div',{st:{fontSize:'7px',color:'var(--ac)',textTransform:'uppercase'}},'POSTURE'),el('div',{st:{fontSize:'13px',fontWeight:'600',color:'var(--ac)'}},rec.posture||'—'))
+)));
+
+// AI Narrative — full analysis from LLM or rule engine
+const narrative=it.ai_narrative||'';
+if(narrative){
+const narDiv=el('div',{cl:'cd mb fi'});
+narDiv.appendChild(el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'AI Risk Analysis'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'8px'}},aiSrc)));
+const narContent=el('div',{st:{fontSize:'10px',color:'var(--t2)',lineHeight:'1.7',whiteSpace:'pre-wrap',fontFamily:'Inter,-apple-system,sans-serif'}});
+// Parse markdown headers, bold, and list items
+let html=narrative;
+// ### headers (from Qwen/LLM)
+html=html.replace(/^###\s+(.+)$/gm,'<span style="color:var(--ac);font-weight:700;font-size:12px;display:block;margin:14px 0 6px;border-bottom:1px solid rgba(212,151,58,.15);padding-bottom:4px">$1</span>');
+// **bold** sections
+html=html.replace(/\*\*([^*]+)\*\*/g,'<span style="color:var(--ac);font-weight:700;font-size:11px;display:inline;margin:0">$1</span>');
+// Numbered lists
+html=html.replace(/^(\d+)\.\s/gm,'<span style="color:var(--ac);font-weight:600">$1.</span> ');
+// Bullet points
+html=html.replace(/•\s/g,'<span style="color:var(--ac)">&#9656;</span> ');
+html=html.replace(/^-\s/gm,'<span style="color:var(--ac)">&#9656;</span> ');
+narContent.innerHTML=html;
+narDiv.appendChild(narContent);
+ct.appendChild(narDiv);
+}
+
+// Alerts with triggers + Actions side by side
 ct.appendChild(el('div',{cl:'g2'},
-el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Alerts')),el('div',null,...(it.alerts||[]).map(a=>el('div',{cl:'al al-'+(a.severity==='HIGH'?'h':'m')},el('div',{cl:'al-sv',st:{color:a.severity==='HIGH'?'var(--rd)':'var(--or)'}},a.severity+' — '+a.type),el('div',{st:{color:'var(--t2)',fontSize:'10px'}},a.msg))))),
-el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Actions')),el('div',null,...(rec.actions||[]).map((a,i)=>el('div',{st:{display:'flex',gap:'7px',marginBottom:'7px',padding:'7px 9px',background:'var(--b0)',borderRadius:'4px'}},el('span',{st:{color:'var(--ac)',fontWeight:'700',fontFamily:'JetBrains Mono',fontSize:'9px'}},'0'+(i+1)),el('span',{st:{fontSize:'10px',color:'var(--t2)',lineHeight:'1.4'}},a)))))));}
+el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Risk Alerts'),el('span',{st:{fontSize:'9px',color:'var(--t3)',marginLeft:'6px'}},(it.alerts||[]).length+' active')),
+el('div',null,...(it.alerts||[]).map(a=>el('div',{cl:'al al-'+(a.severity==='HIGH'?'h':'m'),st:{marginBottom:'6px'}},
+el('div',{st:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
+el('div',{cl:'al-sv',st:{color:a.severity==='HIGH'?'var(--rd)':'var(--or)'}},a.severity+' — '+a.type),
+a.trigger?el('div',{st:{fontSize:'7px',fontFamily:'JetBrains Mono',color:'var(--t3)',background:'var(--b0)',padding:'1px 5px',borderRadius:'3px'}},a.trigger):null),
+el('div',{st:{color:'var(--t2)',fontSize:'10px',lineHeight:'1.5',marginTop:'3px'}},a.msg))))),
+el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Recommended Actions')),el('div',null,...(rec.actions||[]).map((a,i)=>el('div',{st:{display:'flex',gap:'7px',marginBottom:'7px',padding:'7px 9px',background:'var(--b0)',borderRadius:'4px'}},
+el('span',{st:{color:'var(--ac)',fontWeight:'700',fontFamily:'JetBrains Mono',fontSize:'9px'}},'0'+(i+1)),
+el('span',{st:{fontSize:'10px',color:'var(--t2)',lineHeight:'1.4'}},a)))))));
+
+// Risk snapshot section — compact data overview
+const rs=it.risk_snapshot||{};
+const pr=rs.portfolio_risk||{};
+const st2=rs.stress_test||{};
+if(pr.vol_21d){
+ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Quantitative Snapshot')),
+el('div',{cl:'g4',st:{gap:'8px'}},
+kpi('Vol 21d',((pr.vol_21d||0)*100).toFixed(2)+'%','','var(--or)','Realized'),
+kpi('HAR Forecast',((pr.har_forecast||0)*100).toFixed(2)+'%','','var(--pu)','Forward'),
+kpi('Max DD',((pr.max_drawdown||0)*100).toFixed(1)+'%','','var(--rd)','Peak-to-trough'),
+kpi('VaR 5%',((pr.var_5pct||0)*100).toFixed(2)+'%','','var(--rd)','Daily'),
+kpi('CVaR 5%',((pr.cvar_5pct||0)*100).toFixed(2)+'%','','var(--rd)','Expected shortfall'),
+kpi('Kurtosis',(pr.kurtosis||0).toFixed(2),'','var(--bl)','Tail risk'),
+kpi('Skewness',(pr.skewness||0).toFixed(3),'','var(--bl)','Asymmetry'),
+kpi('HHI',(pr.herfindahl||0).toFixed(4),'',pr.diversification_level==='CONCENTRATED'?'var(--rd)':'var(--gn)',pr.diversification_level||'')
+),
+el('div',{st:{marginTop:'8px',padding:'8px',background:'var(--b0)',borderRadius:'5px',display:'flex',gap:'20px'}},
+el('div',{st:{fontSize:'9px'}},el('span',{st:{color:'var(--t3)'}},'Worst Stress: '),el('span',{st:{color:'var(--rd)',fontWeight:'600'}},st2.worst_scenario||'N/A')),
+el('div',{st:{fontSize:'9px'}},el('span',{st:{color:'var(--t3)'}},'Impact: '),el('span',{st:{color:'var(--rd)',fontWeight:'600'}},((st2.worst_impact||0)*100).toFixed(1)+'%')),
+el('div',{st:{fontSize:'9px'}},el('span',{st:{color:'var(--t3)'}},'Most Vulnerable: '),el('span',{st:{color:'var(--or)',fontWeight:'600'}},st2.most_vulnerable||'N/A')),
+el('div',{st:{fontSize:'9px'}},el('span',{st:{color:'var(--t3)'}},'Scenarios: '),el('span',{st:{color:'var(--bl)',fontWeight:'600'}},st2.n_scenarios||0))
+)));
+}
+}
 
 // === HOLDINGS ===
 async function vHoldings(ct){

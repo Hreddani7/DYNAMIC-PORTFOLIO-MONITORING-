@@ -47,7 +47,7 @@ def _build_stock_prices():
         all_stocks = {}
         for mkt, sdict in stocks.items():
             for sym, series in sdict.items():
-                if len(series) >= 100:  # need meaningful history
+                if len(series) >= 10:  # need some history
                     all_stocks[sym] = series
         if len(all_stocks) >= 3:
             df = pd.DataFrame(all_stocks).sort_index().dropna(how="all").ffill().bfill()
@@ -355,7 +355,7 @@ def compute_layer2(prices, holdings):
         "correlation": {
             "avg": round(avg_corr, 4),
             "matrix": corr_heatmap,
-            "history": corr_hist[-60:],
+            "history": corr_hist[-200:],
         },
         "network": {
             "nodes": nodes,

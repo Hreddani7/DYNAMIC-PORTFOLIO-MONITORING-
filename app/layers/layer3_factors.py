@@ -53,10 +53,14 @@ def compute_csad(sdict, min_stk=3):
         "H": np.nan, "gamma_2": np.nan, "t_g2": np.nan,
         "sig": False, "level": "N/A", "n_stocks": 0, "roll_H": [],
     }
-    if len(sdict) < min_stk:
+    # Filter to stocks with enough data for meaningful CSAD computation
+    good_stocks = {k: v for k, v in sdict.items() if len(v) >= 100}
+    if len(good_stocks) < min_stk:
+        good_stocks = sdict  # Fall back to all if not enough long ones
+    if len(good_stocks) < min_stk:
         return pd.Series(dtype=float), null
 
-    panel = pd.DataFrame(sdict).replace(0, np.nan).dropna(how="all")
+    panel = pd.DataFrame(good_stocks).replace(0, np.nan).dropna(how="all")
     log_ret = np.log(panel / panel.shift(1)) * 100
     log_ret = log_ret.replace([np.inf, -np.inf], np.nan).dropna(how="any")
 

@@ -1,14 +1,12 @@
 """
-Layer 4 — AI Regime Detection (InteliRisk v4.1)
+Layer 4 — AI Regime Detection (InteliRisk v4.2)
 5-state Gaussian HMM with comprehensive feature engineering.
 
-6 Feature Categories:
-  Market Risk     — portfolio vol, cross-sectional dispersion, drawdown
-  Structural      — PC1 concentration, rolling correlation
-  USD Liquidity   — F2_USD factor z-score
-  Commodity       — F3_Commodity factor z-score
-  Sovereign       — F4_Sovereign factor z-score
-  Behavioral      — F6_Herding factor z-score
+ALL macro data from CSV injected directly into the HMM:
+  VIX, DXY, MOVE, CDS, yields (SA/US), yield spreads,
+  commodities (oil/gold/copper/platinum), USDZAR, repo rate, etc.
+
+Plus portfolio risk features and factor z-scores.
 
 States: Stable Growth, Commodity Expansion, USD Tightening,
         Sovereign Stress, Systemic Crisis.
@@ -192,48 +190,55 @@ def forecast_regime(trans, p0, steps):
 
 def _label_regimes(X_hmm, states, feat_names, K):
     """
-    Label regimes using economic characteristics:
-    - Mean volatility level (vol features)
-    - Mean return direction (return features)
-    - Factor loadings (commodity, USD, sovereign)
+    Label regimes using economic characteristics.
+    Uses macro data features (VIX, CDS, yields, commodities) for proper identification.
     """
     # Find feature indices by category
     vol_idxs = [i for i, n in enumerate(feat_names) if "rv_" in n or "vol" in n.lower()]
     ret_idxs = [i for i, n in enumerate(feat_names) if "ret_" in n]
-    commodity_idxs = [i for i, n in enumerate(feat_names) if "F3" in n or "commod" in n.lower()]
-    usd_idxs = [i for i, n in enumerate(feat_names) if "F2" in n or "usd" in n.lower()]
-    sovereign_idxs = [i for i, n in enumerate(feat_names) if "F4" in n or "sov" in n.lower()]
+    commodity_idxs = [i for i, n in enumerate(feat_names)
+                      if any(x in n.lower() for x in ["F3", "commod", "oil", "gold", "copper", "platinum"])]
+    usd_idxs = [i for i, n in enumerate(feat_names)
+                if any(x in n.lower() for x in ["F2", "dxy", "usdzar"])]
+    sovereign_idxs = [i for i, n in enumerate(feat_names)
+                      if any(x in n.lower() for x in ["F4", "sov", "cds", "yield_spread", "sa_us_spread"])]
+    vix_idxs = [i for i, n in enumerate(feat_names) if "vix" in n.lower()]
+    crisis_idxs = vol_idxs + vix_idxs + [i for i, n in enumerate(feat_names) if "cds" in n.lower()]
 
     state_profiles = []
     for k in range(K):
         mask = states == k
         if mask.sum() == 0:
-            state_profiles.append({"vol": 0, "ret": 0, "commodity": 0, "usd": 0, "sovereign": 0, "count": 0})
+            state_profiles.append({"vol": 0, "ret": 0, "commodity": 0, "usd": 0,
+                                   "sovereign": 0, "vix": 0, "crisis": 0, "count": 0})
             continue
         vol_mean = X_hmm[mask][:, vol_idxs].mean() if vol_idxs else 0
         ret_mean = X_hmm[mask][:, ret_idxs].mean() if ret_idxs else 0
         com_mean = X_hmm[mask][:, commodity_idxs].mean() if commodity_idxs else 0
         usd_mean = X_hmm[mask][:, usd_idxs].mean() if usd_idxs else 0
         sov_mean = X_hmm[mask][:, sovereign_idxs].mean() if sovereign_idxs else 0
+        vix_mean = X_hmm[mask][:, vix_idxs].mean() if vix_idxs else 0
+        crisis_mean = X_hmm[mask][:, crisis_idxs].mean() if crisis_idxs else 0
         state_profiles.append({
             "vol": vol_mean, "ret": ret_mean, "commodity": com_mean,
-            "usd": usd_mean, "sovereign": sov_mean, "count": int(mask.sum()),
+            "usd": usd_mean, "sovereign": sov_mean, "vix": vix_mean,
+            "crisis": crisis_mean, "count": int(mask.sum()),
         })
 
     # Score each state for each regime archetype
-    # Stable Growth: low vol, positive returns
+    # Stable Growth: low vol, low VIX, positive returns, low CDS
     # Commodity Expansion: positive commodity, moderate vol
-    # USD Tightening: high USD, moderate-high vol
-    # Sovereign Stress: high sovereign, high vol
-    # Systemic Crisis: very high vol, negative returns
+    # USD Tightening: high USD/DXY, moderate-high vol
+    # Sovereign Stress: high sovereign/CDS/yield spread, high vol
+    # Systemic Crisis: very high vol, very high VIX, very high CDS, negative returns
     scores = np.zeros((K, K))
     for k in range(K):
         p = state_profiles[k]
-        scores[k, 0] = -p["vol"] + p["ret"]           # Stable Growth
-        scores[k, 1] = p["commodity"] - abs(p["vol"])   # Commodity Expansion
-        scores[k, 2] = p["usd"] + p["vol"] * 0.3       # USD Tightening
-        scores[k, 3] = p["sovereign"] + p["vol"] * 0.5  # Sovereign Stress
-        scores[k, 4] = p["vol"] * 2 - p["ret"]          # Systemic Crisis
+        scores[k, 0] = -p["vol"] - p["vix"] + p["ret"] - p["sovereign"]  # Stable Growth
+        scores[k, 1] = p["commodity"] - abs(p["vol"]) * 0.3              # Commodity Expansion
+        scores[k, 2] = p["usd"] + p["vol"] * 0.3                         # USD Tightening
+        scores[k, 3] = p["sovereign"] + p["vol"] * 0.3 + p["vix"] * 0.2  # Sovereign Stress
+        scores[k, 4] = p["crisis"] * 1.5 + p["vol"] * 1.5 - p["ret"]    # Systemic Crisis
 
     # Hungarian-style assignment: greedy matching
     used_states = set()
@@ -263,28 +268,68 @@ def _label_regimes(X_hmm, states, feat_names, K):
 FEAT_CATEGORIES = {
     "market_risk": ["rv_", "vol", "disp_"],
     "structural": ["pc1_conc", "corr_mean"],
-    "usd_liquidity": ["F2_USD"],
-    "commodity": ["F3_Commodity"],
-    "sovereign": ["F4_Sovereign"],
+    "usd_liquidity": ["F2_USD", "dxy", "usdzar"],
+    "commodity": ["F3_Commodity", "oil", "gold", "copper", "platinum"],
+    "sovereign": ["F4_Sovereign", "cds", "yield_spread", "sa_us_spread", "yield_sa"],
     "behavioral": ["F6_Herding"],
+    "global": ["vix", "msci_em", "move", "F1_Global", "eurostoxx"],
 }
 
 
 def _categorize_feature(feat_name):
     """Map a feature name to its category."""
+    fn_lower = feat_name.lower()
     for cat, patterns in FEAT_CATEGORIES.items():
         for p in patterns:
-            if p in feat_name:
+            if p.lower() in fn_lower:
                 return cat
-    if "drawdown" in feat_name:
+    if "drawdown" in fn_lower:
         return "market_risk"
-    if "ret_" in feat_name:
+    if "ret_" in fn_lower:
         return "market_risk"
+    if "fed_funds" in fn_lower or "repo" in fn_lower or "jibar" in fn_lower:
+        return "sovereign"
     return "market_risk"
 
 
+def _safe_macro_feature(macro_series, common_idx, name, min_pts=50):
+    """Align a macro series to common_idx, compute rolling z-score, return (series, name) or None."""
+    if macro_series is None or len(macro_series) < 20:
+        return None
+    # Align
+    s = macro_series.reindex(common_idx).ffill().bfill()
+    if s.notna().sum() < min_pts:
+        return None
+    # Rolling z-score (63d)
+    mu = s.rolling(63, min_periods=21).mean()
+    sd = s.rolling(63, min_periods=21).std()
+    zs = (s - mu) / (sd + 1e-8)
+    zs = zs.fillna(0)
+    return zs
+
+
+def _safe_macro_ret(macro_series, common_idx, name, min_pts=50):
+    """Convert a macro price series to log returns, align, z-score."""
+    if macro_series is None or len(macro_series) < 20:
+        return None
+    s = macro_series.reindex(common_idx).ffill().bfill()
+    r = np.log(s.replace(0, np.nan) / s.replace(0, np.nan).shift(1)) * 100
+    r = r.fillna(0)
+    mu = r.rolling(63, min_periods=21).mean()
+    sd = r.rolling(63, min_periods=21).std()
+    zs = (r - mu) / (sd + 1e-8)
+    zs = zs.fillna(0)
+    if zs.notna().sum() < min_pts:
+        return None
+    return zs
+
+
 def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_internal=None):
-    """Full Layer 4 — HMM regime detection with 6 feature categories."""
+    """Full Layer 4 — HMM regime detection with ALL macro data + portfolio features."""
+    from app.ingestion import generate_macro
+
+    macro_df = generate_macro()
+
     ret_all = (np.log(prices / prices.shift(1)) * 100).dropna(how="all")
     min_pts = min(100, max(10, len(ret_all) // 2))
     markets_use = [c for c in ret_all.columns if ret_all[c].dropna().shape[0] >= min_pts]
@@ -296,77 +341,53 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
     hmm_feat = pd.DataFrame(index=common_idx)
     feat_names = []
 
+    # Helper to add a feature
+    def _add(name, series):
+        if series is not None and len(series) > 0:
+            hmm_feat[name] = series.reindex(common_idx).fillna(0)
+            feat_names.append(name)
+
     # ═══════════════════════════════════════════════════════════
-    # CATEGORY 1: Market Risk Features
+    # CATEGORY 1: Market Risk Features (portfolio vol, dispersion, drawdown)
     # ═══════════════════════════════════════════════════════════
     use_portfolio_agg = len(markets_use) > 4
     if use_portfolio_agg:
         port_ret = ret_clean[markets_use].mean(axis=1)
         cross_vol = ret_clean[markets_use].std(axis=1)
-        for wn, w in [("21d", WIN_SHORT), ("63d", WIN_MED), ("126d", WIN_LONG)]:
+        for wn, w in [("21d", WIN_SHORT), ("63d", WIN_MED)]:
             mp = max(min(w // 2, len(port_ret) // 2), 2)
             v = port_ret.rolling(w, min_periods=mp).std() * np.sqrt(252)
-            hmm_feat[f"rv_pf_{wn}"] = (v - v.mean()) / (v.std() + 1e-8)
-            feat_names.append(f"rv_pf_{wn}")
+            _add(f"rv_pf_{wn}", (v - v.mean()) / (v.std() + 1e-8))
             cv = cross_vol.rolling(w, min_periods=mp).mean()
-            hmm_feat[f"disp_{wn}"] = (cv - cv.mean()) / (cv.std() + 1e-8)
-            feat_names.append(f"disp_{wn}")
-        # Top-3 most volatile stocks (21d only)
-        vol_21 = {}
-        for mkt in markets_use:
-            r = ret_clean[mkt]
-            mp = max(min(WIN_SHORT // 2, len(r) // 2), 2)
-            vol_21[mkt] = r.rolling(WIN_SHORT, min_periods=mp).std().iloc[-1] if len(r) > mp else 0
-        top3 = sorted(vol_21, key=vol_21.get, reverse=True)[:3]
-        for mkt in top3:
-            r = ret_clean[mkt]
-            mp = max(min(WIN_SHORT // 2, len(r) // 2), 2)
-            v = r.rolling(WIN_SHORT, min_periods=mp).std() * np.sqrt(252)
-            v = v.reindex(common_idx)
-            hmm_feat[f"rv_{mkt[:5]}_21d"] = (v - v.mean()) / (v.std() + 1e-8)
-            feat_names.append(f"rv_{mkt[:5]}_21d")
+            _add(f"disp_{wn}", (cv - cv.mean()) / (cv.std() + 1e-8))
     else:
         for mkt in markets_use:
             r = ret_clean[mkt]
-            for wn, w in [("21d", WIN_SHORT), ("63d", WIN_MED), ("126d", WIN_LONG)]:
+            for wn, w in [("21d", WIN_SHORT), ("63d", WIN_MED)]:
                 mp = max(min(w // 2, len(r) // 2), 2)
                 v = r.rolling(w, min_periods=mp).std() * np.sqrt(252)
-                v = v.reindex(common_idx)
-                hmm_feat[f"rv_{mkt[:3]}_{wn}"] = (v - v.mean()) / (v.std() + 1e-8)
-                feat_names.append(f"rv_{mkt[:3]}_{wn}")
+                _add(f"rv_{mkt[:3]}_{wn}", (v - v.mean()) / (v.std() + 1e-8))
 
     # Return direction (portfolio-level)
     if use_portfolio_agg:
         port_ret_dir = ret_clean[markets_use].mean(axis=1)
         rm = port_ret_dir.rolling(21, min_periods=10).mean()
-        name = "ret_pf_21d"
-        hmm_feat[name] = (rm - rm.mean()) / (rm.std() + 1e-8)
-        feat_names.append(name)
-    else:
-        for mkt in markets_use[:2]:
-            r = ret_clean[mkt]
-            rm = r.rolling(21, min_periods=10).mean()
-            name = f"ret_{mkt[:3]}_21d"
-            hmm_feat[name] = (rm - rm.mean()) / (rm.std() + 1e-8)
-            feat_names.append(name)
+        _add("ret_pf_21d", (rm - rm.mean()) / (rm.std() + 1e-8))
 
     # Drawdown
     port_ret = ret_clean[markets_use].mean(axis=1)
     cum = (port_ret / 100).cumsum()
     dd = cum - cum.cummax()
-    hmm_feat["drawdown"] = (dd - dd.mean()) / (dd.std() + 1e-8)
-    feat_names.append("drawdown")
+    _add("drawdown", (dd - dd.mean()) / (dd.std() + 1e-8))
 
     # ═══════════════════════════════════════════════════════════
-    # CATEGORY 2: Structural Features
+    # CATEGORY 2: Structural Features (PC1, correlation)
     # ═══════════════════════════════════════════════════════════
     if l2_internal and "pca_conc" in l2_internal and len(l2_internal["pca_conc"]) > 0:
         pc1 = l2_internal["pca_conc"]["PC1_frac"].reindex(common_idx).ffill().bfill()
         if pc1.notna().sum() > 50:
-            hmm_feat["pc1_conc"] = (pc1 - pc1.mean()) / (pc1.std() + 1e-8)
-            feat_names.append("pc1_conc")
+            _add("pc1_conc", (pc1 - pc1.mean()) / (pc1.std() + 1e-8))
 
-    # Rolling mean pairwise correlation
     if len(markets_use) > 1:
         corr_parts = []
         for i, m1 in enumerate(markets_use):
@@ -380,29 +401,153 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
                         corr_parts.append(rc)
         if corr_parts:
             corr_mean = pd.concat(corr_parts, axis=1).reindex(common_idx).ffill().bfill().mean(axis=1).fillna(0)
-            hmm_feat["corr_mean"] = (corr_mean - corr_mean.mean()) / (corr_mean.std() + 1e-8)
-            feat_names.append("corr_mean")
+            _add("corr_mean", (corr_mean - corr_mean.mean()) / (corr_mean.std() + 1e-8))
 
     # ═══════════════════════════════════════════════════════════
-    # CATEGORIES 3-6: Factor z-scores (USD, Commodity, Sovereign, Behavioral)
+    # CATEGORY 3: DIRECT MACRO DATA — ALL CSV series injected into HMM
+    # This is the KEY change: raw macro data drives regime detection
     # ═══════════════════════════════════════════════════════════
-    factor_features = ["F2_USD", "F3_Commodity", "F4_Sovereign", "F6_Herding"]
+    if macro_df is not None and len(macro_df) > 0:
+        macro = macro_df
+
+        # --- Global Risk Indicators ---
+        # VIX (level z-score — high VIX = risk-off)
+        if "vix" in macro.columns:
+            zs = _safe_macro_feature(macro["vix"], common_idx, "vix")
+            if zs is not None:
+                _add("vix_level", zs)
+
+        # MSCI EM (returns — falling EM = risk)
+        if "msci_em" in macro.columns:
+            zs = _safe_macro_ret(macro["msci_em"], common_idx, "msci_em")
+            if zs is not None:
+                _add("msci_em_ret", zs)
+
+        # MOVE Index (bond volatility — high = stress)
+        if "move" in macro.columns:
+            zs = _safe_macro_feature(macro["move"], common_idx, "move")
+            if zs is not None:
+                _add("move_level", zs)
+
+        # Euro Stoxx (returns)
+        if "eurostoxx" in macro.columns:
+            zs = _safe_macro_ret(macro["eurostoxx"], common_idx, "eurostoxx")
+            if zs is not None:
+                _add("eurostoxx_ret", zs)
+
+        # --- USD Liquidity ---
+        # DXY (level z-score — high DXY = USD tightening)
+        if "dxy" in macro.columns:
+            zs = _safe_macro_feature(macro["dxy"], common_idx, "dxy")
+            if zs is not None:
+                _add("dxy_level", zs)
+
+        # USDZAR (level — high = ZAR weakness)
+        if "USDZAR" in macro.columns:
+            zs = _safe_macro_feature(macro["USDZAR"], common_idx, "USDZAR")
+            if zs is not None:
+                _add("usdzar_level", zs)
+
+        # Fed Funds Rate
+        if "fed_funds" in macro.columns:
+            zs = _safe_macro_feature(macro["fed_funds"], common_idx, "fed_funds")
+            if zs is not None:
+                _add("fed_funds_level", zs)
+
+        # --- Commodity Risk ---
+        # Oil (returns)
+        if "oil" in macro.columns:
+            zs = _safe_macro_ret(macro["oil"], common_idx, "oil")
+            if zs is not None:
+                _add("oil_ret", zs)
+
+        # Gold (returns)
+        if "gold" in macro.columns:
+            zs = _safe_macro_ret(macro["gold"], common_idx, "gold")
+            if zs is not None:
+                _add("gold_ret", zs)
+
+        # Copper (returns)
+        if "copper" in macro.columns:
+            zs = _safe_macro_ret(macro["copper"], common_idx, "copper")
+            if zs is not None:
+                _add("copper_ret", zs)
+
+        # Platinum (returns)
+        if "platinum" in macro.columns:
+            zs = _safe_macro_ret(macro["platinum"], common_idx, "platinum")
+            if zs is not None:
+                _add("platinum_ret", zs)
+
+        # --- Sovereign Risk (CRITICAL — CDS, yields, spreads) ---
+        # SA CDS 5Y (level — high = sovereign distress)
+        if "cds_SA" in macro.columns:
+            zs = _safe_macro_feature(macro["cds_SA"], common_idx, "cds_SA")
+            if zs is not None:
+                _add("cds_sa_level", zs)
+
+        # SA 10Y Yield (level)
+        if "yield_SA" in macro.columns:
+            zs = _safe_macro_feature(macro["yield_SA"], common_idx, "yield_SA")
+            if zs is not None:
+                _add("yield_sa_level", zs)
+
+        # US 10Y Yield (level)
+        if "yield_US" in macro.columns:
+            zs = _safe_macro_feature(macro["yield_US"], common_idx, "yield_US")
+            if zs is not None:
+                _add("yield_us_level", zs)
+
+        # SA-US Yield Spread (SOVEREIGN FACTOR — calculated here)
+        if "yield_SA" in macro.columns and "yield_US" in macro.columns:
+            sa_yield = macro["yield_SA"].reindex(common_idx).ffill().bfill()
+            us_yield = macro["yield_US"].reindex(common_idx).ffill().bfill()
+            sa_us_spread = sa_yield - us_yield
+            zs = _safe_macro_feature(sa_us_spread, common_idx, "sa_us_spread")
+            if zs is not None:
+                _add("sa_us_yield_spread", zs)
+
+        # SA Yield Curve Spread (10Y-2Y)
+        if "yield_spread_SA" in macro.columns:
+            zs = _safe_macro_feature(macro["yield_spread_SA"], common_idx, "yield_spread_SA")
+            if zs is not None:
+                _add("yield_spread_sa", zs)
+
+        # SA 2Y Yield
+        if "yield_SA_2Y" in macro.columns:
+            zs = _safe_macro_feature(macro["yield_SA_2Y"], common_idx, "yield_SA_2Y")
+            if zs is not None:
+                _add("yield_sa_2y", zs)
+
+        # SA 20Y Yield
+        if "yield_SA_20Y" in macro.columns:
+            zs = _safe_macro_feature(macro["yield_SA_20Y"], common_idx, "yield_SA_20Y")
+            if zs is not None:
+                _add("yield_sa_20y", zs)
+
+        # --- Domestic Macro ---
+        # Repo Rate
+        if "repo_rate" in macro.columns:
+            zs = _safe_macro_feature(macro["repo_rate"], common_idx, "repo_rate")
+            if zs is not None:
+                _add("repo_rate_level", zs)
+
+        # JIBAR
+        if "jibar" in macro.columns:
+            zs = _safe_macro_feature(macro["jibar"], common_idx, "jibar")
+            if zs is not None:
+                _add("jibar_level", zs)
+
+    # ═══════════════════════════════════════════════════════════
+    # CATEGORY 4: Factor z-scores from L3 (supplement macro data)
+    # ═══════════════════════════════════════════════════════════
+    factor_features = ["F1_Global", "F2_USD", "F3_Commodity", "F4_Sovereign", "F5_Domestic", "F6_Herding"]
     if l3_internal and "fact_sc" in l3_internal:
         for f in factor_features:
             if f in l3_internal["fact_sc"].columns:
                 s = l3_internal["fact_sc"][f].reindex(common_idx).ffill().bfill()
                 if s.notna().sum() > 50:
-                    hmm_feat[f] = s
-                    feat_names.append(f)
-
-    # Also add F1_Global and F5_Domestic if available
-    if l3_internal and "fact_sc" in l3_internal:
-        for f in ["F1_Global", "F5_Domestic"]:
-            if f in l3_internal["fact_sc"].columns:
-                s = l3_internal["fact_sc"][f].reindex(common_idx).ffill().bfill()
-                if s.notna().sum() > 50:
-                    hmm_feat[f] = s
-                    feat_names.append(f)
+                    _add(f, s)
 
     # ═══════════════════════════════════════════════════════════
     # Build feature matrix
@@ -412,9 +557,38 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
     if len(hmm_feat) < 50:
         return _default_regime(markets_use)
 
+    # Limit feature count to avoid curse of dimensionality
+    # If too many features, select the most informative ones
+    MAX_FEATURES = 25
+    if len(feat_names) > MAX_FEATURES:
+        # Keep all market risk + structural features, then sample from macro
+        priority = []
+        secondary = []
+        for i, n in enumerate(feat_names):
+            cat = _categorize_feature(n)
+            if cat in ("market_risk", "structural"):
+                priority.append(i)
+            elif n in ("vix_level", "cds_sa_level", "sa_us_yield_spread", "dxy_level",
+                        "oil_ret", "gold_ret", "usdzar_level", "yield_sa_level",
+                        "F1_Global", "F2_USD", "F3_Commodity", "F4_Sovereign", "F6_Herding"):
+                priority.append(i)
+            else:
+                secondary.append(i)
+        # Fill remaining slots from secondary
+        remaining = MAX_FEATURES - len(priority)
+        if remaining > 0:
+            selected = priority + secondary[:remaining]
+        else:
+            selected = priority[:MAX_FEATURES]
+        selected = sorted(selected)
+        feat_names = [feat_names[i] for i in selected]
+        hmm_feat = hmm_feat.iloc[:, selected]
+
     X_hmm = StandardScaler().fit_transform(hmm_feat.values)
     D = X_hmm.shape[1]
     K = REGIME_COUNT
+
+    print(f"[L4] HMM features ({D}): {feat_names}")
 
     # ═══════════════════════════════════════════════════════════
     # Fit HMM
@@ -501,10 +675,11 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
     cur_probs = reg_probs.iloc[-1]
     crisis_p = float(cur_probs.get("Sovereign Stress", 0) + cur_probs.get("Systemic Crisis", 0))
 
+    print(f"[L4] Active regime: {REGIME_LABELS[cur_reg]} | Crisis P: {crisis_p:.3f}")
+
     # ═══════════════════════════════════════════════════════════
     # Regime Duration & Shift Detection
     # ═══════════════════════════════════════════════════════════
-    # How many consecutive days in current regime
     regime_duration = 0
     for i in range(len(regime_s) - 1, -1, -1):
         if regime_s.iloc[i] == cur_reg:
@@ -512,18 +687,15 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
         else:
             break
 
-    # Shift probability: 1 - P(staying in current regime)
     shift_prob = 1.0 - float(trans_m[cur_reg, cur_reg])
 
-    # Detect if shift is accelerating (compare recent 5d probs to 21d average)
     if len(reg_probs) > 21:
         recent_stay = float(reg_probs.iloc[-5:][REGIME_LABELS[cur_reg]].mean())
         older_stay = float(reg_probs.iloc[-21:-5][REGIME_LABELS[cur_reg]].mean())
-        shift_accel = older_stay - recent_stay  # positive = confidence dropping = shift accelerating
+        shift_accel = older_stay - recent_stay
     else:
         shift_accel = 0
 
-    # Shift signal classification
     if shift_prob > 0.4 or (shift_prob > 0.25 and shift_accel > 0.1):
         shift_signal = "imminent"
     elif shift_prob > 0.25 or shift_accel > 0.1:
@@ -538,7 +710,9 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
     # ═══════════════════════════════════════════════════════════
     feature_contributions = {}
     last_row = X_hmm[-1]
-    for cat in FEAT_CATEGORIES:
+    all_cats = set(FEAT_CATEGORIES.keys())
+    all_cats.add("global")
+    for cat in all_cats:
         cat_idxs = [i for i, n in enumerate(feat_names) if _categorize_feature(n) == cat]
         if cat_idxs:
             avg_abs = float(np.mean(np.abs(last_row[cat_idxs])))
@@ -565,7 +739,6 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
                 "typical_duration": 0, "key_drivers": [],
             }
             continue
-        # Compute typical duration (mean consecutive streak length)
         streaks = []
         cur_streak = 0
         for v in regime_s.values:
@@ -579,7 +752,6 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
             streaks.append(cur_streak)
         avg_dur = float(np.mean(streaks)) if streaks else 0
 
-        # Key drivers: which features are most elevated in this regime
         regime_means = X_hmm[mask.values].mean(axis=0)
         top_feat_idxs = np.argsort(np.abs(regime_means))[::-1][:3]
         key_drivers = [feat_names[i] for i in top_feat_idxs]
@@ -588,8 +760,8 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
             0: "Low volatility, positive returns. Markets trending upward with contained risk.",
             1: "Commodity prices driving markets. Mining and resource sectors outperform.",
             2: "USD strength pressuring EM currencies. Capital outflows, ZAR weakness.",
-            3: "Elevated sovereign risk premiums. Political or fiscal uncertainty.",
-            4: "Extreme volatility, correlation spike. Diversification fails, risk-off.",
+            3: "Elevated sovereign risk premiums. Political or fiscal uncertainty. High CDS spreads.",
+            4: "Extreme volatility, VIX spike, CDS blowout, correlation surge. Systemic risk-off.",
         }
         regime_characteristics[REGIME_LABELS[r]] = {
             "description": descriptions.get(r, REGIME_LABELS[r]),
@@ -667,7 +839,7 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
             "feature_names": feat_names,
             "feature_categories": {cat: [feat_names[i] for i in range(len(feat_names))
                                           if _categorize_feature(feat_names[i]) == cat]
-                                   for cat in FEAT_CATEGORIES},
+                                   for cat in all_cats},
         },
         "regime_labels": REGIME_LABELS,
         "regime_colors": REGIME_COLORS,

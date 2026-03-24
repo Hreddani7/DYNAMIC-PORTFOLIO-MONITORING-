@@ -149,7 +149,7 @@ def _load_real_data():
     jse_sdict = {}
     for sym, fn in jse_stock_map.items():
         sv = _try_load_csv(os.path.join(jse_dir, fn))
-        if sv is not None and len(sv) >= 10:
+        if sv is not None and len(sv) >= 5:
             jse_sdict[sym] = sv
     if jse_sdict:
         stocks["JSE_SA"] = jse_sdict
