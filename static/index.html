@@ -295,7 +295,7 @@ if(cv4){CTS['ag4']=new Chart(cv4,{type:'line',data:{labels:rr[longestKey].dates.
 if(contribKeys.length){
 const sortedCK=contribKeys.sort((a,b)=>(contrib[b].contribution||0)-(contrib[a].contribution||0));
 const cv5=document.getElementById('ag5');
-if(cv5){CTS['ag5']=new Chart(cv5,{type:'bar',data:{labels:sortedCK,datasets:[{label:'Contribution (%)',data:sortedCK.map(k=>contrib[k].contribution),backgroundColor:sortedCK.map(k=>contrib[k].contribution>=0?'rgba(45,212,160,.6)':'rgba(240,96,96,.6)'),borderWidth:0,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'horizontal',plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#586880',font:{size:7}},border:{display:false}},y:{title:{display:true,text:'Return Contribution (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}
+if(cv5){CTS['ag5']=new Chart(cv5,{type:'bar',data:{labels:sortedCK,datasets:[{label:'Contribution (%)',data:sortedCK.map(k=>contrib[k].contribution),backgroundColor:sortedCK.map(k=>contrib[k].contribution>=0?'rgba(45,212,160,.6)':'rgba(240,96,96,.6)'),borderWidth:0,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.raw.toFixed(2)+'%'}}},scales:{y:{grid:{display:false},ticks:{color:'#586880',font:{size:8}},border:{display:false}},x:{title:{display:true,text:'Return Contribution (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}
 }
 
 },80);
@@ -685,10 +685,11 @@ el('input',{type:'checkbox',id:'sim-use-factors',st:{accentColor:'var(--ac)'},on
 'Apply Factor Stress (Fama-French)'),
 el('div',{id:'factor-panel',st:{display:'none'}},
 el('div',{cl:'g2',st:{gap:'6px',marginBottom:'8px'}},
-...['Mkt-RF','SMB','HML','RMW','CMA','Mom'].map(f=>
+...[{k:'Mkt-RF',n:'Market Risk Premium'},{k:'SMB',n:'Small Minus Big (Size)'},{k:'HML',n:'High Minus Low (Value)'},{k:'RMW',n:'Robust Minus Weak (Quality)'},{k:'CMA',n:'Conservative Minus Aggressive (Investment)'},{k:'Mom',n:'Momentum Factor'}].map(({k:f,n:fn})=>
 el('div',{st:{background:'var(--b0)',borderRadius:'4px',padding:'6px'}},
-el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase',marginBottom:'3px'}},f),
-el('input',{cl:'fin',type:'range',min:'-50',max:'50',value:'0',step:'5',id:'shock-'+f,st:{width:'100%',padding:'2px'},onChange:function(){$('#shk-val-'+f).textContent=this.value+'%';}}),
+el('div',{st:{fontSize:'7px',color:'var(--t3)',textTransform:'uppercase',marginBottom:'1px'}},f),
+el('div',{st:{fontSize:'6px',color:'var(--t3)',marginBottom:'3px',opacity:'.7'}},fn),
+el('input',{cl:'fin',type:'range',min:'-50',max:'50',value:'0',step:'5',id:'shock-'+f,st:{width:'100%',padding:'2px'},onInput:function(){$('#shk-val-'+f).textContent=this.value+'%';}}),
 el('div',{st:{fontSize:'8px',color:'var(--ac)',textAlign:'center'},id:'shk-val-'+f},'0%')))),
 )),
 // Run button
@@ -730,7 +731,8 @@ const useFac=$('#sim-use-factors');
 if(useFac&&useFac.checked){
 body.factors=['Mkt-RF','SMB','HML','RMW','CMA','Mom'];
 body.shocks={};
-['Mkt-RF','SMB','HML','RMW','CMA','Mom'].forEach(f=>{const v=$('#shock-'+f);if(v)body.shocks[f]=+v.value/100;});
+['Mkt-RF','SMB','HML','RMW','CMA','Mom'].forEach(f=>{const v=$('#shock-'+f);if(v&&+v.value!==0)body.shocks[f]=+v.value/100;});
+if(Object.keys(body.shocks).length===0)delete body.shocks;
 }
 result=await api('/api/v1/simulator/'+PID+'/monte-carlo',{method:'POST',body:JSON.stringify(body)});
 }else{
@@ -1047,6 +1049,42 @@ el('div',{st:{fontSize:'9px'}},el('span',{st:{color:'var(--t3)'}},'Most Vulnerab
 el('div',{st:{fontSize:'9px'}},el('span',{st:{color:'var(--t3)'}},'Scenarios: '),el('span',{st:{color:'var(--bl)',fontWeight:'600'}},st2.n_scenarios||0))
 )));
 }
+
+// Inline Intelligence Chat
+const chatBox=el('div',{cl:'cd mb fi'},
+el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Ask the AI'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'8px'}},'Ask about your portfolio risk, factors, regime, or any question')),
+el('div',{id:'intel-chat-msgs',st:{maxHeight:'200px',overflowY:'auto',marginBottom:'8px',minHeight:'40px'}},
+el('div',{st:{fontSize:'9px',color:'var(--t3)',padding:'8px',textAlign:'center'}},'Ask a question about your portfolio or the risk analysis above...')),
+el('div',{st:{display:'flex',gap:'6px'}},
+el('input',{type:'text',id:'intel-chat-input',st:{flex:'1',background:'var(--b0)',border:'1px solid var(--bd)',borderRadius:'5px',padding:'8px 10px',color:'var(--t1)',fontSize:'10px',outline:'none'},placeholder:'e.g., Why is the regime Sovereign Stress? What should I do about my mining exposure?',onKeyDown:function(e){if(e.key==='Enter')intelChatSend();}}),
+el('button',{cl:'btn',st:{padding:'6px 14px',fontSize:'9px'},onClick:intelChatSend},'Send'))
+);
+ct.appendChild(chatBox);
+}
+
+async function intelChatSend(){
+const inp=$('#intel-chat-input');if(!inp)return;
+const msg=inp.value.trim();if(!msg)return;
+const msgsDiv=$('#intel-chat-msgs');
+if(!msgsDiv)return;
+// Clear placeholder
+if(msgsDiv.querySelector('div[style*="text-align"]'))msgsDiv.innerHTML='';
+// Add user message
+msgsDiv.appendChild(el('div',{st:{padding:'5px 8px',marginBottom:'4px',background:'rgba(212,151,58,.08)',borderRadius:'5px',fontSize:'9px',color:'var(--t1)'}},el('span',{st:{color:'var(--ac)',fontWeight:'600'}},'You: '),msg));
+inp.value='';
+// Show loading
+const loadEl=el('div',{st:{padding:'5px 8px',fontSize:'9px',color:'var(--t3)'}},'Thinking...');
+msgsDiv.appendChild(loadEl);
+msgsDiv.scrollTop=msgsDiv.scrollHeight;
+try{
+const res=await api('/api/v1/chat',{method:'POST',body:JSON.stringify({message:msg,portfolio_id:PID})});
+loadEl.remove();
+msgsDiv.appendChild(el('div',{st:{padding:'5px 8px',marginBottom:'4px',background:'var(--b0)',borderRadius:'5px',fontSize:'9px',color:'var(--t2)',lineHeight:'1.5'}},el('span',{st:{color:'var(--bl)',fontWeight:'600'}},'AI: '),res.response||'No response'));
+}catch(e){
+loadEl.remove();
+msgsDiv.appendChild(el('div',{st:{padding:'5px 8px',fontSize:'9px',color:'var(--rd)'}},'Error: '+e.message));
+}
+msgsDiv.scrollTop=msgsDiv.scrollHeight;
 }
 
 // === HOLDINGS ===

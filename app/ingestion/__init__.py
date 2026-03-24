@@ -208,8 +208,8 @@ def _load_real_data():
     s = _try_load_csv(os.path.join(DATA_DIR, "SA SOVEREIGN FACTORS", "SA CDS 5Y.csv"))
     if s is not None:
         macro["cds_SA"] = s
-    # SA Yield Curve Spread (10Y-2Y)
-    s = _try_load_csv(os.path.join(DATA_DIR, "SA SOVEREIGN FACTORS", "SA YIELD CURVE (SPREAD).csv"))
+    # SA Yield Curve Spread (10Y-2Y) — FRED-style CSV
+    s = _try_load_fred_csv(os.path.join(DATA_DIR, "SA SOVEREIGN FACTORS", "SA YIELD CURVE (SPREAD).csv"))
     if s is not None:
         macro["yield_spread_SA"] = s
 
@@ -226,6 +226,40 @@ def _load_real_data():
     s = _try_load_fred_csv(os.path.join(DATA_DIR, "SA DOMESTIC FACTORS", "M2 money supply.csv"), "MYAGM2ZAM189N")
     if s is not None:
         macro["m2_supply"] = s
+
+    # CPI Inflation (World Bank — yearly, interpolated to daily)
+    try:
+        cpi_path = os.path.join(DATA_DIR, "SA DOMESTIC FACTORS", "API_FP.CPI.TOTL.ZG_DS2_en_csv_v2_84.csv")
+        cpi_df = pd.read_csv(cpi_path, skiprows=4)
+        sa_row = cpi_df[cpi_df["Country Name"] == "South Africa"]
+        if len(sa_row) > 0:
+            years = [c for c in cpi_df.columns if c.isdigit()]
+            cpi_vals = sa_row[years].values.flatten()
+            cpi_dates = pd.to_datetime([f"{y}-06-30" for y in years])
+            cpi_s = pd.Series(cpi_vals, index=cpi_dates, dtype=float).dropna()
+            if len(cpi_s) > 5:
+                # Resample yearly to daily via interpolation
+                cpi_daily = cpi_s.resample("D").interpolate(method="linear")
+                macro["cpi_sa"] = cpi_daily
+    except Exception:
+        pass
+
+    # M3 Money Supply YoY (SARB — tab-separated monthly)
+    try:
+        m3_path = os.path.join(DATA_DIR, "SA DOMESTIC FACTORS", "south-africa.sarb-m3-money-supply-yy.csv")
+        m3_df = pd.read_csv(m3_path, sep="\t", encoding="utf-8-sig", na_values=["", " "])
+        if len(m3_df.columns) == 1 and "\t" in m3_df.columns[0]:
+            # Re-parse — columns merged
+            m3_df = pd.read_csv(m3_path, sep="\t", encoding="utf-8-sig")
+        if "Date" in m3_df.columns and "ActualValue" in m3_df.columns:
+            m3_df["Date"] = pd.to_datetime(m3_df["Date"].str.strip(), format="mixed")
+            m3_df["ActualValue"] = pd.to_numeric(m3_df["ActualValue"], errors="coerce")
+            m3_s = m3_df.set_index("Date")["ActualValue"].dropna().sort_index()
+            if len(m3_s) > 5:
+                m3_daily = m3_s.resample("D").interpolate(method="linear")
+                macro["m3_supply_yoy"] = m3_daily
+    except Exception:
+        pass
 
     # ── GLOBAL EXTRAS ──────────────────────────────────────────
     # Euro Stoxx 50

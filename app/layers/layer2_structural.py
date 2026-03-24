@@ -270,12 +270,20 @@ def compute_layer2(prices, holdings):
     if n > 1:
         roll_step = max(1, len(ret_clean) // 150)
         for t in range(60, len(ret_clean), roll_step):
-            c = ret_clean.iloc[t - 60:t].corr().values
+            window = ret_clean.iloc[t - 60:t].dropna(axis=1, how="all")
+            if len(window.columns) >= 2:
+                c = window.corr().values
+                n_w = len(window.columns)
+                up = np.triu_indices(n_w, k=1)
+                val = float(np.nanmean(c[up]))
+            else:
+                val = None
             d = ret_clean.index[t]
-            corr_hist.append({
-                "date": str(d.date()) if hasattr(d, 'date') else str(d),
-                "value": round(float(np.mean(c[upper])), 4),
-            })
+            if val is not None and not np.isnan(val):
+                corr_hist.append({
+                    "date": str(d.date()) if hasattr(d, 'date') else str(d),
+                    "value": round(val, 4),
+                })
 
     # ── Contagion network ────────────────────────────────────
     G = nx.Graph()
