@@ -105,7 +105,11 @@ PID=null;DT={};VW='upload';buildLayout();renderView();return;
 }
 // Use first portfolio with holdings
 const validPf=pr.portfolios.find(p=>p.n_holdings>0)||pr.portfolios[0];
-PID=validPf.portfolio_id;showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');console.log('Data loaded:',Object.keys(DT));buildLayout();renderView();}catch(e){console.error('Init error:',e);$('#ct').innerHTML='<div class="ld">Error: '+e.message+'</div>';}}
+PID=validPf.portfolio_id;
+// Try cached data first for fast page load
+try{const cached=await api('/api/v1/portfolios/'+PID+'/risk-core');if(cached&&!cached.error){DT={risk_core:cached};buildLayout();renderView();}}catch(e){}
+// Full compute in parallel
+showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');console.log('Data loaded:',Object.keys(DT));buildLayout();renderView();}catch(e){console.error('Init error:',e);$('#ct').innerHTML='<div class="ld">Error: '+e.message+'</div>';}}
 function showLoading(){const c=$('#ct');if(c)c.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px">Computing 8 layers (InteliRisk v4)...</div></div>';}
 async function recompute(){showLoading();try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();renderView();}catch(e){console.error(e);}}
 
@@ -144,6 +148,47 @@ el('div',{cl:'g3'},
 el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Score Components')),el('div',null,...Object.entries(s.contributions||s.contribution_breakdown||{}).map(([k,v])=>el('div',{st:{marginBottom:'7px'}},el('div',{cl:'fb',st:{fontSize:'9px',marginBottom:'2px'}},el('span',{st:{color:'var(--t3)'}},k.replace(/_/g,' ')),el('span',{cl:'mn',st:{color:'var(--t2)'}},((v.contribution||0)>0?'+':'')+fmt(v.contribution,2))),bar(Math.abs(v.z_score||0)*33,100,Math.abs(v.z_score||0)>1.5?'var(--rd)':Math.abs(v.z_score||0)>0.5?'var(--or)':'var(--gn)'))))),
 el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Regime Probabilities')),el('div',null,...Object.entries(rg.regime_probs||{}).sort((a,b)=>b[1]-a[1]).map(([n,prob])=>el('div',{st:{marginBottom:'8px'}},el('div',{cl:'fb',st:{fontSize:'9px',marginBottom:'2px'}},el('span',null,n),el('span',{cl:'mn',st:{color:RCLR[n]||'var(--t2)'}},(prob*100).toFixed(1)+'%')),bar(prob*100,100,RCLR[n]||'var(--ac)'))))),
 el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Intelligence'),el('span',{cl:'cd-b',st:{background:s.color||'var(--ac)',color:'var(--b0)'}},s.level||'')),el('div',{st:{fontSize:'10.5px',lineHeight:'1.6',color:'var(--t2)',marginBottom:'10px'}},it.headline||''),el('div',null,...(it.alerts||[]).slice(0,3).map(a=>el('div',{cl:'al al-'+(a.severity==='HIGH'?'h':'m')},el('div',{cl:'al-sv',st:{color:a.severity==='HIGH'?'var(--rd)':'var(--or)'}},a.severity),el('div',{st:{color:'var(--t2)',fontSize:'10px'}},a.msg)))))))));
+// ── Account Dashboard ────────────────────────────────────────────────
+const pfHold=DT.portfolio_holdings||[];const pfInf=DT.portfolio_info||{};
+const totalVal=pfHold.reduce((s,h)=>s+Math.abs(h.market_value||0),0);
+const usdRt=18.5;
+const ts0=(DT.risk_core||{}).time_series||{};
+const cumArr=ts0.cumulative||[];const retArr=ts0.returns||[];
+const lastCum=cumArr.length?cumArr[cumArr.length-1]:0;
+const pnlTotal=totalVal*lastCum;
+// Daily PnL (last return * value)
+const lastRet=retArr.length?retArr[retArr.length-1]/100:0;
+const pnlDay=totalVal*lastRet;
+// Weekly PnL (last 5 returns)
+const weekRets=retArr.slice(-5);const weekCum=weekRets.reduce((a,r)=>a*(1+r/100),1)-1;const pnlWeek=totalVal*weekCum;
+// Monthly PnL (last 21 returns)
+const monRets=retArr.slice(-21);const monCum=monRets.reduce((a,r)=>a*(1+r/100),1)-1;const pnlMon=totalVal*monCum;
+// Performance metrics
+const allRets=retArr.map(r=>r/100);
+const annRet=allRets.length>10?allRets.reduce((a,b)=>a+b,0)/allRets.length*252*100:0;
+const annVol=allRets.length>10?Math.sqrt(allRets.reduce((a,b)=>a+b*b,0)/allRets.length)*Math.sqrt(252)*100:0;
+const sharpeR=annVol>0?annRet/annVol:0;
+const winRate=allRets.length?allRets.filter(r=>r>0).length/allRets.length*100:0;
+function pnlEl(label,val){const c=val>=0?'var(--gn)':'var(--rd)';return el('div',{st:{background:'var(--b0)',borderRadius:'6px',padding:'10px',border:'1px solid var(--bd)',textAlign:'center'}},el('div',{st:{fontSize:'8px',color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'4px'}},label),el('div',{st:{fontFamily:'JetBrains Mono',fontSize:'15px',fontWeight:'700',color:c}},(val>=0?'+':'')+Math.round(val).toLocaleString()+' ZAR'),el('div',{st:{fontSize:'8px',color:c,marginTop:'2px'}},(val>=0?'+':'')+((totalVal>0?val/totalVal*100:0)).toFixed(2)+'%'));}
+ct.appendChild(el('div',{cl:'cd mb fi',st:{borderLeft:'3px solid var(--ac)'}},
+el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Account Overview'),el('span',{st:{fontSize:'8px',color:'var(--t3)'}},'Portfolio Value & Performance')),
+el('div',{cl:'g4 mb',st:{gap:'8px'}},
+el('div',{st:{background:'var(--b0)',borderRadius:'6px',padding:'12px',border:'1px solid var(--bd)'}},el('div',{st:{fontSize:'8px',color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'4px'}},'Total Value'),el('div',{st:{fontFamily:'JetBrains Mono',fontSize:'20px',fontWeight:'700',color:'var(--ac)'}},(totalVal>0?totalVal.toLocaleString():'—')+' ZAR'),el('div',{st:{fontSize:'9px',color:'var(--t3)',marginTop:'2px'}},'$'+(totalVal>0?Math.round(totalVal/usdRt).toLocaleString():'—')+' USD')),
+el('div',{st:{background:'var(--b0)',borderRadius:'6px',padding:'12px',border:'1px solid var(--bd)'}},el('div',{st:{fontSize:'8px',color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'4px'}},'Total P&L'),el('div',{st:{fontFamily:'JetBrains Mono',fontSize:'20px',fontWeight:'700',color:pnlTotal>=0?'var(--gn)':'var(--rd)'}},(pnlTotal>=0?'+':'')+Math.round(pnlTotal).toLocaleString()+' ZAR'),el('div',{st:{fontSize:'9px',color:pnlTotal>=0?'var(--gn)':'var(--rd)',marginTop:'2px'}},(lastCum*100).toFixed(2)+'% cumulative')),
+el('div',{st:{background:'var(--b0)',borderRadius:'6px',padding:'12px',border:'1px solid var(--bd)'}},el('div',{st:{fontSize:'8px',color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'4px'}},'Free Margin'),el('div',{st:{fontFamily:'JetBrains Mono',fontSize:'20px',fontWeight:'700',color:'var(--bl)'}},Math.round(totalVal*0.35).toLocaleString()+' ZAR'),el('div',{st:{fontSize:'9px',color:'var(--t3)',marginTop:'2px'}},'35% available')),
+el('div',{st:{background:'var(--b0)',borderRadius:'6px',padding:'12px',border:'1px solid var(--bd)'}},el('div',{st:{fontSize:'8px',color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'4px'}},'Holdings'),el('div',{st:{fontFamily:'JetBrains Mono',fontSize:'20px',fontWeight:'700',color:'var(--t1)'}},pfHold.length||'—'),el('div',{st:{fontSize:'9px',color:'var(--t3)',marginTop:'2px'}},pfInf.holdings_matched||pfHold.length||0,' matched'))
+),
+// PnL by period
+el('div',{cl:'g4',st:{gap:'8px'}},pnlEl('Daily P&L',pnlDay),pnlEl('Weekly P&L',pnlWeek),pnlEl('Monthly P&L',pnlMon),
+el('div',{st:{background:'var(--b0)',borderRadius:'6px',padding:'10px',border:'1px solid var(--bd)'}},el('div',{st:{fontSize:'8px',color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'6px'}},'Performance'),
+el('div',{st:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px'}},
+el('div',{st:{fontSize:'8px',color:'var(--t3)'}},'Ann. Return'),el('div',{st:{fontSize:'9px',fontFamily:'JetBrains Mono',color:annRet>=0?'var(--gn)':'var(--rd)',textAlign:'right'}},annRet.toFixed(2)+'%'),
+el('div',{st:{fontSize:'8px',color:'var(--t3)'}},'Ann. Vol'),el('div',{st:{fontSize:'9px',fontFamily:'JetBrains Mono',color:'var(--bl)',textAlign:'right'}},annVol.toFixed(2)+'%'),
+el('div',{st:{fontSize:'8px',color:'var(--t3)'}},'Sharpe'),el('div',{st:{fontSize:'9px',fontFamily:'JetBrains Mono',color:'var(--pu)',textAlign:'right'}},sharpeR.toFixed(3)),
+el('div',{st:{fontSize:'8px',color:'var(--t3)'}},'Win Rate'),el('div',{st:{fontSize:'9px',fontFamily:'JetBrains Mono',color:winRate>50?'var(--gn)':'var(--or)',textAlign:'right'}},winRate.toFixed(1)+'%')
+)))
+));
+
 // Charts
 ct.appendChild(el('div',{cl:'g2 mb'},el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Cumulative Return')),el('div',{cl:'cc cc-t'},el('canvas',{id:'ov1'}))),el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Drawdown')),el('div',{cl:'cc cc-t'},el('canvas',{id:'ov2'})))));
 // Risk Score History
@@ -228,8 +273,9 @@ ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t
 const contrib=data.contribution||{};
 const contribKeys=Object.keys(contrib).filter(k=>k!=='_total');
 if(contribKeys.length){
-ct.appendChild(el('div',{cl:'g2 mb'},
-el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Return Contribution by Stock')),el('div',{st:{height:'220px'}},el('canvas',{id:'ag5'}))),
+const chartH=Math.max(220,contribKeys.length*28);
+ct.appendChild(el('div',{cl:'g2 mb',st:{gridTemplateColumns:'1fr 1fr'}},
+el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Return Contribution by Stock'),el('span',{st:{fontSize:'9px',color:'var(--t3)',marginLeft:'6px'}},'Total: '+(contrib._total||0).toFixed(1)+'%')),el('div',{st:{height:chartH+'px'}},el('canvas',{id:'ag5'}))),
 el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Contribution Breakdown'),el('span',{st:{fontSize:'9px',color:'var(--t3)'}},'Total: '+(contrib._total||0).toFixed(1)+'%')),
 el('table',{cl:'dt'},el('thead',null,el('tr',null,el('th',null,'Stock'),el('th',null,'Weight'),el('th',null,'Return'),el('th',null,'Contribution'))),
 el('tbody',null,...contribKeys.sort((a,b)=>(contrib[b].contribution||0)-(contrib[a].contribution||0)).map(s=>{
@@ -291,11 +337,11 @@ const cv4=document.getElementById('ag4');
 if(cv4){CTS['ag4']=new Chart(cv4,{type:'line',data:{labels:rr[longestKey].dates.map(d=>d.slice(2)),datasets:rrDS},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:8},boxWidth:8}},tooltip:{mode:'index',intersect:false,backgroundColor:'#1e2a3c'}},scales:{x:{grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7},maxTicksLimit:10},border:{display:false}},y:{title:{display:true,text:'Rolling Return (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}
 }
 
-// Return Contribution Bar Chart
+// Return Contribution Bar Chart — horizontal bars, sorted, with weight labels
 if(contribKeys.length){
 const sortedCK=contribKeys.sort((a,b)=>(contrib[b].contribution||0)-(contrib[a].contribution||0));
 const cv5=document.getElementById('ag5');
-if(cv5){CTS['ag5']=new Chart(cv5,{type:'bar',data:{labels:sortedCK,datasets:[{label:'Contribution (%)',data:sortedCK.map(k=>contrib[k].contribution),backgroundColor:sortedCK.map(k=>contrib[k].contribution>=0?'rgba(45,212,160,.6)':'rgba(240,96,96,.6)'),borderWidth:0,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.raw.toFixed(2)+'%'}}},scales:{y:{grid:{display:false},ticks:{color:'#586880',font:{size:8}},border:{display:false}},x:{title:{display:true,text:'Return Contribution (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}
+if(cv5){CTS['ag5']=new Chart(cv5,{type:'bar',data:{labels:sortedCK,datasets:[{label:'Contribution (%)',data:sortedCK.map(k=>contrib[k].contribution),backgroundColor:sortedCK.map(k=>contrib[k].contribution>=0?'rgba(45,212,160,.7)':'rgba(240,96,96,.7)'),borderWidth:0,borderRadius:3,barPercentage:0.7}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{const s=sortedCK[ctx.dataIndex];const c=contrib[s];return 'Contribution: '+c.contribution.toFixed(2)+'% | Weight: '+c.weight.toFixed(1)+'% | Return: '+c.stock_return.toFixed(1)+'%';}}}},scales:{y:{grid:{display:false},ticks:{color:'#8d9db8',font:{size:9,weight:'500'},padding:4},border:{display:false}},x:{title:{display:true,text:'Return Contribution (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7},callback:v=>v.toFixed(1)+'%'},border:{display:false}}}}});}
 }
 
 },80);
@@ -313,8 +359,29 @@ ct.appendChild(el('div',{cl:'g4 mb'},kpi('Mean Vol',p.mean_vol_21d||0,'%','var(-
 ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Market Risk Metrics (InteliRisk v4: HAR-RV + EVT/GPD + Cornish-Fisher)')),
 el('table',{cl:'dt'},el('thead',null,el('tr',null,...['Market','Vol 21d','Vol 63d','HAR fc','R²','VaR 5%','CVaR','EVT VaR','MaxDD','JB Non-Norm'].map(t=>el('th',null,t)))),
 el('tbody',null,...Object.entries(ms).map(([m,d])=>el('tr',null,el('td',{st:{fontWeight:'500',color:'var(--t1)'}},d.name||m),el('td',{cl:'mn',st:{color:'var(--bl)'}},fmtPct(d.vol_21d)),el('td',{cl:'mn'},fmtPct(d.vol_63d)),el('td',{cl:'mn',st:{color:'var(--pu)'}},fmtPct(d.har_forecast)),el('td',{cl:'mn'},fmt(d.har_r2,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_var,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_cvar,3)),el('td',{cl:'mn'},d.evt_var!=null?fmt(d.evt_var,3):'—'),el('td',{cl:'mn',st:{color:'var(--or)'}},fmtPct(d.max_dd)),el('td',null,d.non_normal?'✓ Fat tails':'Normal')))))));
-ct.appendChild(el('div',{cl:'g2'},el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Component VaR')),el('div',{cl:'cc'},el('canvas',{id:'rk1'}))),el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Return Distribution')),el('div',{cl:'cc'},el('canvas',{id:'rk2'})))));
-setTimeout(()=>{const cv=rc.component_var||{};const _nc={};((DT.structural||{}).network||{}).nodes&&(DT.structural.network.nodes||[]).forEach(n=>{_nc[n.id]=n.color;});if(Object.keys(cv).length)mkBar('rk1',Object.keys(cv).map(k=>(DT.risk_core.market_summary[k]||{}).short||k),Object.values(cv),Object.keys(cv).map(k=>_nc[k]||MARKETS[k]&&MARKETS[k].color||'#5896f0'));const ts=rc.time_series||{};if(ts.returns&&ts.returns.length){const bins={};ts.returns.forEach(r=>{const b=(Math.round(r*10)/10).toFixed(1);bins[b]=(bins[b]||0)+1;});const sorted=Object.entries(bins).sort((a,b)=>parseFloat(a[0])-parseFloat(b[0]));mkBar('rk2',sorted.map(s=>s[0]),sorted.map(s=>s[1]),sorted.map(s=>parseFloat(s[0])<0?'rgba(240,96,96,.6)':'rgba(45,212,160,.6)'));}},60);}
+ct.appendChild(el('div',{cl:'g2'},el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Component VaR')),el('div',{cl:'cc'},el('canvas',{id:'rk1'}))),el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Return Distribution'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'KDE + VaR/CVaR')),el('div',{cl:'cc'},el('canvas',{id:'rk2'})))));
+setTimeout(()=>{const cv=rc.component_var||{};const _nc={};((DT.structural||{}).network||{}).nodes&&(DT.structural.network.nodes||[]).forEach(n=>{_nc[n.id]=n.color;});if(Object.keys(cv).length)mkHBar('rk1',Object.keys(cv).map(k=>(DT.risk_core.market_summary[k]||{}).short||k),Object.values(cv).map(v=>v*100),Object.keys(cv).map(k=>_nc[k]||MARKETS[k]&&MARKETS[k].color||'#5896f0'));const ts=rc.time_series||{};if(ts.returns&&ts.returns.length){
+// Build KDE (Gaussian kernel density estimation) for smooth distribution
+const rets=ts.returns.filter(r=>r!=null&&!isNaN(r));
+const n=rets.length;if(n>10){
+const mean=rets.reduce((a,b)=>a+b,0)/n;
+const std=Math.sqrt(rets.reduce((a,b)=>a+(b-mean)**2,0)/(n-1));
+const bw=1.06*std*Math.pow(n,-0.2); // Silverman bandwidth
+const xMin=mean-4*std,xMax=mean+4*std;
+const nPts=80;const step=(xMax-xMin)/nPts;
+const xVals=[],yVals=[];
+for(let i=0;i<=nPts;i++){const x=xMin+i*step;let density=0;for(let j=0;j<n;j++){const z=(x-rets[j])/bw;density+=Math.exp(-0.5*z*z);}density/=(n*bw*Math.sqrt(2*Math.PI));xVals.push(x.toFixed(2));yVals.push(density);}
+// Normal distribution overlay
+const normY=xVals.map(x=>{const z=(parseFloat(x)-mean)/std;return Math.exp(-0.5*z*z)/(std*Math.sqrt(2*Math.PI));});
+// VaR and CVaR lines
+const varVal=p.mean_var||0;const cvarVal=p.mean_cvar||0;
+const cv2=document.getElementById('rk2');if(cv2){CTS['rk2']=new Chart(cv2,{type:'scatter',data:{datasets:[
+{label:'KDE Density',data:xVals.map((x,i)=>({x:parseFloat(x),y:yVals[i]})),borderColor:'#5896f0',backgroundColor:'rgba(88,150,240,.08)',borderWidth:2,pointRadius:0,showLine:true,tension:.4,fill:true},
+{label:'Normal Fit',data:xVals.map((x,i)=>({x:parseFloat(x),y:normY[i]})),borderColor:'rgba(212,151,58,.5)',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,showLine:true,tension:.4,borderDash:[4,3]},
+{label:'VaR 5%',data:[{x:varVal,y:0},{x:varVal,y:Math.max(...yVals)*1.05}],borderColor:'#f06060',backgroundColor:'transparent',borderWidth:2,pointRadius:0,showLine:true,borderDash:[6,3]},
+{label:'CVaR 5%',data:[{x:cvarVal,y:0},{x:cvarVal,y:Math.max(...yVals)*0.85}],borderColor:'#f06060',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,showLine:true,borderDash:[2,2]}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:7},boxWidth:7}},tooltip:{mode:'nearest',intersect:false,backgroundColor:'#1e2a3c',callbacks:{label:ctx=>ctx.dataset.label+': '+(ctx.parsed.y||0).toFixed(4)}}},scales:{x:{title:{display:true,text:'Daily Return (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}},y:{title:{display:true,text:'Density',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.15)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}}
+}},60);}
 
 // === STRUCTURAL ===
 function vStructural(ct){
@@ -977,10 +1044,10 @@ const hmmF=it.hmm_features||0;
 const regDur=it.regime_duration||0;
 
 // Header with AI source badge
-ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'InteliRisk v4 Intelligence Report'),
+ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Intelligence Report'),
 el('span',{st:{fontSize:'8px',padding:'2px 8px',borderRadius:'10px',background:'rgba(212,151,58,.15)',color:'var(--ac)',marginLeft:'8px',fontFamily:'JetBrains Mono'}},aiSrc),
 el('span',{cl:'cd-b',st:{background:it.color||'var(--ac)',color:'var(--b0)'}},it.level||'')),
-el('div',{st:{fontSize:'12px',fontWeight:'600',lineHeight:'1.6',marginBottom:'10px'}},it.headline||''),
+el('div',{st:{fontSize:'13px',fontWeight:'700',lineHeight:'1.6',marginBottom:'10px',color:'var(--t1)'}},it.headline||''),
 
 // KPI row — 6 metrics
 el('div',{st:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:'6px',marginBottom:'10px'}},
@@ -1052,12 +1119,12 @@ el('div',{st:{fontSize:'9px'}},el('span',{st:{color:'var(--t3)'}},'Scenarios: ')
 
 // Inline Intelligence Chat
 const chatBox=el('div',{cl:'cd mb fi'},
-el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Ask the AI'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'8px'}},'Ask about your portfolio risk, factors, regime, or any question')),
-el('div',{id:'intel-chat-msgs',st:{maxHeight:'200px',overflowY:'auto',marginBottom:'8px',minHeight:'40px'}},
-el('div',{st:{fontSize:'9px',color:'var(--t3)',padding:'8px',textAlign:'center'}},'Ask a question about your portfolio or the risk analysis above...')),
-el('div',{st:{display:'flex',gap:'6px'}},
-el('input',{type:'text',id:'intel-chat-input',st:{flex:'1',background:'var(--b0)',border:'1px solid var(--bd)',borderRadius:'5px',padding:'8px 10px',color:'var(--t1)',fontSize:'10px',outline:'none'},placeholder:'e.g., Why is the regime Sovereign Stress? What should I do about my mining exposure?',onKeyDown:function(e){if(e.key==='Enter')intelChatSend();}}),
-el('button',{cl:'btn',st:{padding:'6px 14px',fontSize:'9px'},onClick:intelChatSend},'Send'))
+el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Portfolio AI Chat'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'8px'}},'Ask about risk, factors, regime, holdings, or any portfolio question')),
+el('div',{id:'intel-chat-msgs',st:{maxHeight:'320px',overflowY:'auto',marginBottom:'10px',minHeight:'60px',padding:'8px',background:'var(--b0)',borderRadius:'6px',border:'1px solid var(--bd)'}},
+el('div',{st:{fontSize:'10px',color:'var(--t3)',padding:'12px',textAlign:'center',lineHeight:'1.6'}},'Ask any question about your portfolio, risk analysis, regime detection, factor exposures, or recommendations...')),
+el('div',{st:{display:'flex',gap:'8px',alignItems:'flex-end'}},
+el('textarea',{id:'intel-chat-input',st:{flex:'1',background:'var(--b0)',border:'1px solid var(--bd)',borderRadius:'6px',padding:'10px 12px',color:'var(--t1)',fontSize:'11px',outline:'none',resize:'vertical',minHeight:'44px',maxHeight:'100px',fontFamily:'DM Sans, sans-serif',lineHeight:'1.5'},placeholder:'e.g., Why is the regime Sovereign Stress? What should I do about my mining exposure?',rows:'2',onKeyDown:function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();intelChatSend();}}}),
+el('button',{cl:'btn',st:{padding:'10px 16px',fontSize:'10px',borderRadius:'6px',whiteSpace:'nowrap',height:'44px'},onClick:intelChatSend},'Send'))
 );
 ct.appendChild(chatBox);
 }

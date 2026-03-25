@@ -226,19 +226,26 @@ def _label_regimes(X_hmm, states, feat_names, K):
         })
 
     # Score each state for each regime archetype
-    # Stable Growth: low vol, low VIX, positive returns, low CDS
-    # Commodity Expansion: positive commodity, moderate vol
-    # USD Tightening: high USD/DXY, moderate-high vol
-    # Sovereign Stress: high sovereign/CDS/yield spread, high vol
-    # Systemic Crisis: very high vol, very high VIX, very high CDS, negative returns
+    # Stable Growth: low vol, low VIX, positive returns, low CDS, low sovereign
+    # Commodity Expansion: positive commodity factor, moderate vol
+    # USD Tightening: high USD/DXY, high USDZAR, moderate vol
+    # Sovereign Stress: high sovereign/CDS/yield spread, elevated vol
+    # Systemic Crisis: EXTREME vol + EXTREME VIX + negative returns + high CDS (ALL must be extreme)
+    #
+    # Key: Systemic Crisis must require convergence of multiple extreme signals.
+    # High vol alone is NOT crisis. Crisis = vol spike + VIX spike + CDS blowout + negative returns.
     scores = np.zeros((K, K))
     for k in range(K):
         p = state_profiles[k]
-        scores[k, 0] = -p["vol"] - p["vix"] + p["ret"] - p["sovereign"]  # Stable Growth
-        scores[k, 1] = p["commodity"] - abs(p["vol"]) * 0.3              # Commodity Expansion
-        scores[k, 2] = p["usd"] + p["vol"] * 0.3                         # USD Tightening
-        scores[k, 3] = p["sovereign"] + p["vol"] * 0.3 + p["vix"] * 0.2  # Sovereign Stress
-        scores[k, 4] = p["crisis"] * 1.5 + p["vol"] * 1.5 - p["ret"]    # Systemic Crisis
+        scores[k, 0] = -p["vol"] * 1.2 - p["vix"] * 0.8 + p["ret"] * 1.5 - p["sovereign"] * 0.5  # Stable Growth
+        scores[k, 1] = p["commodity"] * 1.5 + p["ret"] * 0.5 - p["vol"] * 0.2                      # Commodity Expansion
+        scores[k, 2] = p["usd"] * 1.5 + p["vol"] * 0.2 - p["commodity"] * 0.3                      # USD Tightening
+        scores[k, 3] = p["sovereign"] * 1.5 + p["vix"] * 0.3 + p["vol"] * 0.2 - p["ret"] * 0.3    # Sovereign Stress
+        # Crisis: require ALL indicators to be extreme simultaneously
+        # Only the state with the highest vol AND highest VIX AND most negative returns qualifies
+        scores[k, 4] = (min(p["vol"], p["vix"]) * 2.0  # Both must be high (min ensures convergence)
+                        + p["sovereign"] * 0.5
+                        - p["ret"] * 1.5)  # Strongly negative returns required
 
     # Hungarian-style assignment: greedy matching
     used_states = set()
@@ -673,7 +680,9 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
 
     cur_reg = int(regime_s.iloc[-1])
     cur_probs = reg_probs.iloc[-1]
-    crisis_p = float(cur_probs.get("Sovereign Stress", 0) + cur_probs.get("Systemic Crisis", 0))
+    # Crisis probability: full weight for Systemic Crisis, partial for Sovereign Stress
+    # Sovereign Stress is elevated risk but not full crisis
+    crisis_p = float(cur_probs.get("Systemic Crisis", 0) + cur_probs.get("Sovereign Stress", 0) * 0.3)
 
     print(f"[L4] Active regime: {REGIME_LABELS[cur_reg]} | Crisis P: {crisis_p:.3f}")
 

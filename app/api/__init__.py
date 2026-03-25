@@ -939,12 +939,20 @@ def portfolio_analytics(pid):
     dd = (cum_port - cum_max) / cum_max
     max_dd = float(dd.min())
 
+    # Use risk_core worst_dd if available for consistency with Overview page
+    rc_dd = None
+    try:
+        cached = computed_cache.get(pid, {})
+        rc_dd = cached.get("risk_core", {}).get("portfolio", {}).get("worst_dd")
+    except Exception:
+        pass
+
     summary = {
         "total_return": round(total_port_ret * 100, 2),
         "ann_return": round(ann_ret * 100, 2),
         "ann_volatility": round(ann_vol * 100, 2),
         "sharpe": round(sharpe, 3),
-        "max_drawdown": round(max_dd * 100, 2),
+        "max_drawdown": round(rc_dd, 2) if rc_dd is not None else round(max_dd * 100, 2),
         "n_stocks": len(price_df.columns),
         "n_days": len(returns_df),
         "start_date": str(returns_df.index[0].date()),
