@@ -275,11 +275,12 @@ def _label_regimes(X_hmm, states, feat_names, K):
 FEAT_CATEGORIES = {
     "market_risk": ["rv_", "vol", "disp_"],
     "structural": ["pc1_conc", "corr_mean"],
-    "usd_liquidity": ["F2_USD", "dxy", "usdzar"],
+    "usd_liquidity": ["F2_USD", "dxy", "usdzar", "fed_funds"],
     "commodity": ["F3_Commodity", "oil", "gold", "copper", "platinum"],
     "sovereign": ["F4_Sovereign", "cds", "yield_spread", "sa_us_spread", "yield_sa"],
+    "domestic": ["F5_Domestic", "repo", "jibar"],
     "behavioral": ["F6_Herding"],
-    "global": ["vix", "msci_em", "move", "F1_Global", "eurostoxx"],
+    "global": ["vix", "msci_em", "move", "F1_Global", "eurostoxx", "yield_us"],
 }
 
 
@@ -294,8 +295,6 @@ def _categorize_feature(feat_name):
         return "market_risk"
     if "ret_" in fn_lower:
         return "market_risk"
-    if "fed_funds" in fn_lower or "repo" in fn_lower or "jibar" in fn_lower:
-        return "sovereign"
     return "market_risk"
 
 
@@ -566,18 +565,22 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
 
     # Limit feature count to avoid curse of dimensionality
     # If too many features, select the most informative ones
-    MAX_FEATURES = 25
+    MAX_FEATURES = 30
     if len(feat_names) > MAX_FEATURES:
         # Keep all market risk + structural features, then sample from macro
         priority = []
         secondary = []
+        PRIORITY_FEATS = {
+            "vix_level", "cds_sa_level", "sa_us_yield_spread", "dxy_level",
+            "oil_ret", "gold_ret", "usdzar_level", "yield_sa_level",
+            "yield_us_level", "fed_funds_level", "repo_rate_level", "jibar_level",
+            "F1_Global", "F2_USD", "F3_Commodity", "F4_Sovereign", "F5_Domestic", "F6_Herding",
+        }
         for i, n in enumerate(feat_names):
             cat = _categorize_feature(n)
             if cat in ("market_risk", "structural"):
                 priority.append(i)
-            elif n in ("vix_level", "cds_sa_level", "sa_us_yield_spread", "dxy_level",
-                        "oil_ret", "gold_ret", "usdzar_level", "yield_sa_level",
-                        "F1_Global", "F2_USD", "F3_Commodity", "F4_Sovereign", "F6_Herding"):
+            elif n in PRIORITY_FEATS:
                 priority.append(i)
             else:
                 secondary.append(i)
@@ -598,15 +601,18 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
     print(f"[L4] HMM features ({D}): {feat_names}")
 
     # ═══════════════════════════════════════════════════════════
-    # Fit HMM
+    # Fit HMM — with strong regularization to prevent overfitting
     # ═══════════════════════════════════════════════════════════
     HMM_CLS = _HMM if _HAS_HMMLEARN else _FallbackHMM
     best_ll = -np.inf
     best_model = None
 
     n_seeds = 20 if _HAS_HMMLEARN else 5
-    n_iter_full = 200 if _HAS_HMMLEARN else 80
-    n_iter_diag = 300 if _HAS_HMMLEARN else 100
+    n_iter_full = 150 if _HAS_HMMLEARN else 60
+    n_iter_diag = 200 if _HAS_HMMLEARN else 80
+
+    # Strong covariance prior — prevents overly tight clusters that cause 100% assignments
+    cov_prior = np.eye(D) * 0.5
 
     for seed in range(n_seeds):
         try:
@@ -616,7 +622,7 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
                 n_iter=n_iter_full,
                 tol=1e-4,
                 random_state=seed * 7 + 1,
-                covariance_prior=np.eye(D) * 0.1,
+                covariance_prior=cov_prior,
             )
             if _HAS_HMMLEARN:
                 kw["init_params"] = "stmc"
@@ -624,7 +630,12 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
             m = HMM_CLS(**kw)
             m.fit(X_hmm)
             seq = m.predict(X_hmm)
-            if max((seq == k).mean() for k in range(K)) > 0.90:
+            # Reject degenerate models where one state dominates > 85%
+            if max((seq == k).mean() for k in range(K)) > 0.85:
+                continue
+            # Require at least 3 active states (>2% each) for a valid model
+            active_states = sum(1 for k in range(K) if (seq == k).mean() > 0.02)
+            if active_states < 3:
                 continue
             ll = m.score(X_hmm)
             if ll > best_ll:
@@ -633,7 +644,7 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
         except Exception:
             continue
 
-    # Fallback: diag covariance
+    # Fallback: diag covariance with weaker constraints
     if best_model is None:
         for seed in range(n_seeds):
             try:
@@ -648,6 +659,25 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
                 seq = m.predict(X_hmm)
                 if max((seq == k).mean() for k in range(K)) > 0.90:
                     continue
+                ll = m.score(X_hmm)
+                if ll > best_ll:
+                    best_ll = ll
+                    best_model = m
+            except Exception:
+                continue
+
+    # Last resort: accept any model
+    if best_model is None:
+        for seed in range(5):
+            try:
+                m = HMM_CLS(
+                    n_components=K,
+                    covariance_type="diag",
+                    n_iter=100,
+                    tol=1e-4,
+                    random_state=seed * 13 + 3,
+                )
+                m.fit(X_hmm)
                 ll = m.score(X_hmm)
                 if ll > best_ll:
                     best_ll = ll
@@ -671,6 +701,14 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
     probs = raw_probs[:, order]
     trans_m = best_model.transmat_[order][:, order]
 
+    # ── Probability smoothing — prevent 100%/0% extremes ──────
+    # 1. Floor smoothing: blend with uniform to ensure no state is exactly 0%
+    FLOOR_WEIGHT = 0.05  # 5% weight to uniform prior
+    uniform = np.ones(K) / K
+    probs = (1.0 - FLOOR_WEIGHT) * probs + FLOOR_WEIGHT * uniform
+    # Re-normalize each row
+    probs = probs / probs.sum(axis=1, keepdims=True)
+
     regime_s = pd.Series(states, index=hmm_feat.index, name="regime")
     reg_probs = pd.DataFrame(
         probs,
@@ -678,8 +716,16 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
         columns=[REGIME_LABELS[i] for i in range(K)],
     )
 
+    # 2. Temporal smoothing for current probabilities — average last 5 days
+    # This prevents a single-day spike from showing 95%+ for one state
+    TEMPORAL_WINDOW = min(5, len(reg_probs))
+    cur_probs_raw = reg_probs.iloc[-TEMPORAL_WINDOW:].mean()
+    # Re-normalize
+    cur_probs_raw = cur_probs_raw / cur_probs_raw.sum()
+
     cur_reg = int(regime_s.iloc[-1])
-    cur_probs = reg_probs.iloc[-1]
+    cur_probs = cur_probs_raw
+
     # Crisis probability: full weight for Systemic Crisis, partial for Sovereign Stress
     # Sovereign Stress is elevated risk but not full crisis
     crisis_p = float(cur_probs.get("Systemic Crisis", 0) + cur_probs.get("Sovereign Stress", 0) * 0.3)
@@ -840,11 +886,13 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
         "history": history,
         "model_info": {
             "type": "GaussianHMM (hmmlearn)" if _HAS_HMMLEARN else "Fallback",
+            "hmmlearn_used": _HAS_HMMLEARN,
             "best_ll": round(best_ll, 2),
             "aic": round(aic, 1),
             "bic": round(bic, 1),
             "n_features": D,
             "n_observations": len(X_hmm),
+            "smoothing": {"floor_weight": FLOOR_WEIGHT, "temporal_window": TEMPORAL_WINDOW},
             "feature_names": feat_names,
             "feature_categories": {cat: [feat_names[i] for i in range(len(feat_names))
                                           if _categorize_feature(feat_names[i]) == cat]

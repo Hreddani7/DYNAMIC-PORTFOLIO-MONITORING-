@@ -100,12 +100,17 @@ function drawGauge(id,score,level,color){const cv=document.getElementById(id);if
 function showLogin(){$('#root').innerHTML='';$('#root').appendChild(el('div',{cl:'lw'},el('div',{cl:'lb'},el('div',{cl:'lb-logo'},'AfriSK'),el('div',{cl:'lb-sub'},'African Structural Risk Intelligence — InteliRisk Engine'),el('div',{cl:'fg'},el('label',{cl:'fl'},'Username'),el('input',{cl:'fin',id:'lu',type:'text',value:'admin'})),el('div',{cl:'fg'},el('label',{cl:'fl'},'Password'),el('input',{cl:'fin',id:'lp',type:'password',value:'admin123'})),el('div',{id:'le',cl:'lerr'}),el('button',{cl:'btn',id:'lbtn',onClick:doLogin},'Sign In'),el('div',{cl:'lhint'},'admin/admin123 · institution/inst123 · retail/retail123'))));document.querySelectorAll('.fin').forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()}));}
 async function doLogin(){const b=$('#lbtn');b.disabled=true;b.textContent='Authenticating...';try{const d=await api('/api/v1/auth/login',{method:'POST',body:JSON.stringify({username:$('#lu').value,password:$('#lp').value})});TK=d.access_token;US={username:d.username,role:d.role};await initApp();}catch(e){$('#le').textContent='Invalid credentials';b.disabled=false;b.textContent='Sign In';}}
 async function initApp(){buildLayout();try{const pr=await api('/api/v1/portfolios');if(!pr.portfolios.length||!pr.portfolios.some(p=>p.n_holdings>0)){
-// No portfolio uploaded — show empty state, go to Upload view
+// No portfolio uploaded — show Upload view
 PID=null;DT={};VW='upload';buildLayout();renderView();return;
 }
-// Use first portfolio with holdings
+// Portfolio exists — still go to Upload page first so user can manage portfolio
+// They can navigate to Overview after reviewing/updating their holdings
 const validPf=pr.portfolios.find(p=>p.n_holdings>0)||pr.portfolios[0];
-PID=validPf.portfolio_id;showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');console.log('Data loaded:',Object.keys(DT));buildLayout();renderView();}catch(e){console.error('Init error:',e);$('#ct').innerHTML='<div class="ld">Error: '+e.message+'</div>';}}
+PID=validPf.portfolio_id;
+// Pre-compute in background, but show Upload page first
+VW='upload';buildLayout();renderView();
+// Background compute so data is ready when they navigate
+api('/api/v1/portfolios/'+PID+'/compute-all').then(d=>{DT=d;console.log('Data loaded:',Object.keys(DT));}).catch(e=>console.warn('Background compute:',e.message));}catch(e){console.error('Init error:',e);VW='upload';buildLayout();renderView();}}
 function showLoading(){const c=$('#ct');if(c)c.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px">Computing 8 layers (InteliRisk)...</div></div>';}
 async function recompute(){showLoading();try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();renderView();}catch(e){console.error(e);}}
 
