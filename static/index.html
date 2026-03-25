@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
-:root{--b0:#080c14;--b1:#0f1520;--b2:#17202e;--b3:#1e2a3c;--bd:#253045;--bd2:#344560;--t1:#e8ecf4;--t2:#8d9db8;--t3:#586880;--ac:#d4973a;--ac2:#e8ad50;--gn:#2dd4a0;--rd:#f06060;--or:#f09838;--bl:#5896f0;--pu:#9878e8;--cy:#20c8e0}
+:root{--b0:#000000;--b1:#0a0a0a;--b2:#111111;--b3:#1a1a1a;--bd:#222222;--bd2:#333333;--t1:#e8ecf4;--t2:#8d9db8;--t3:#586880;--ac:#d4973a;--ac2:#e8ad50;--gn:#2dd4a0;--rd:#f06060;--or:#f09838;--bl:#5896f0;--pu:#9878e8;--cy:#20c8e0}
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;background:var(--b0);color:var(--t1);overflow:hidden;height:100vh;-webkit-font-smoothing:antialiased}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}input,textarea,select,button{font-family:inherit}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
@@ -97,7 +97,7 @@ function mkHBar(id,labels,data,colors){const cv=document.getElementById(id);if(!
 function drawGauge(id,score,level,color){const cv=document.getElementById(id);if(!cv)return;const ctx=cv.getContext('2d');const w=cv.width=cv.parentElement.offsetWidth||300;const h=cv.height=Math.min(w*0.55,180);const cx=w/2,cy=h-15,r=Math.min(cx-20,cy-10);const zones=[{e:15,c:'#1E6B2E'},{e:30,c:'#4CAF50'},{e:45,c:'#C9A227'},{e:60,c:'#E67E22'},{e:75,c:'#E74C3C'},{e:90,c:'#C0392B'},{e:100,c:'#8B0000'}];ctx.clearRect(0,0,w,h);let prev=0;zones.forEach(z=>{const a1=Math.PI+Math.PI*(prev/100);const a2=Math.PI+Math.PI*(z.e/100);ctx.beginPath();ctx.arc(cx,cy,r,a1,a2);ctx.lineWidth=r*0.28;ctx.strokeStyle=z.c;ctx.stroke();prev=z.e;});const angle=Math.PI+Math.PI*(Math.min(Math.max(score,0),100)/100);const nl=r*0.75;ctx.save();ctx.translate(cx,cy);ctx.rotate(angle);ctx.beginPath();ctx.moveTo(0,-4);ctx.lineTo(nl,0);ctx.lineTo(0,4);ctx.closePath();ctx.fillStyle='#e8ecf4';ctx.fill();ctx.restore();ctx.beginPath();ctx.arc(cx,cy,8,0,2*Math.PI);ctx.fillStyle='#1a2436';ctx.fill();ctx.strokeStyle='#586880';ctx.lineWidth=2;ctx.stroke();ctx.font='bold 18px DM Sans';ctx.fillStyle=color||'#e8ecf4';ctx.textAlign='center';ctx.fillText(score.toFixed(1),cx,cy-r*0.35);ctx.font='10px DM Sans';ctx.fillStyle='#8d9db8';ctx.fillText(level||'',cx,cy-r*0.35+16);}
 
 // LOGIN
-function showLogin(){$('#root').innerHTML='';$('#root').appendChild(el('div',{cl:'lw'},el('div',{cl:'lb'},el('div',{cl:'lb-logo'},'AfriSK'),el('div',{cl:'lb-sub'},'African Structural Risk Intelligence — InteliRisk v4 Engine'),el('div',{cl:'fg'},el('label',{cl:'fl'},'Username'),el('input',{cl:'fin',id:'lu',type:'text',value:'admin'})),el('div',{cl:'fg'},el('label',{cl:'fl'},'Password'),el('input',{cl:'fin',id:'lp',type:'password',value:'admin123'})),el('div',{id:'le',cl:'lerr'}),el('button',{cl:'btn',id:'lbtn',onClick:doLogin},'Sign In'),el('div',{cl:'lhint'},'admin/admin123 · institution/inst123 · retail/retail123'))));document.querySelectorAll('.fin').forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()}));}
+function showLogin(){$('#root').innerHTML='';$('#root').appendChild(el('div',{cl:'lw'},el('div',{cl:'lb'},el('div',{cl:'lb-logo'},'AfriSK'),el('div',{cl:'lb-sub'},'African Structural Risk Intelligence — InteliRisk Engine'),el('div',{cl:'fg'},el('label',{cl:'fl'},'Username'),el('input',{cl:'fin',id:'lu',type:'text',value:'admin'})),el('div',{cl:'fg'},el('label',{cl:'fl'},'Password'),el('input',{cl:'fin',id:'lp',type:'password',value:'admin123'})),el('div',{id:'le',cl:'lerr'}),el('button',{cl:'btn',id:'lbtn',onClick:doLogin},'Sign In'),el('div',{cl:'lhint'},'admin/admin123 · institution/inst123 · retail/retail123'))));document.querySelectorAll('.fin').forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()}));}
 async function doLogin(){const b=$('#lbtn');b.disabled=true;b.textContent='Authenticating...';try{const d=await api('/api/v1/auth/login',{method:'POST',body:JSON.stringify({username:$('#lu').value,password:$('#lp').value})});TK=d.access_token;US={username:d.username,role:d.role};await initApp();}catch(e){$('#le').textContent='Invalid credentials';b.disabled=false;b.textContent='Sign In';}}
 async function initApp(){buildLayout();try{const pr=await api('/api/v1/portfolios');if(!pr.portfolios.length||!pr.portfolios.some(p=>p.n_holdings>0)){
 // No portfolio uploaded — show empty state, go to Upload view
@@ -105,19 +105,15 @@ PID=null;DT={};VW='upload';buildLayout();renderView();return;
 }
 // Use first portfolio with holdings
 const validPf=pr.portfolios.find(p=>p.n_holdings>0)||pr.portfolios[0];
-PID=validPf.portfolio_id;
-// Try cached data first for fast page load
-try{const cached=await api('/api/v1/portfolios/'+PID+'/risk-core');if(cached&&!cached.error){DT={risk_core:cached};buildLayout();renderView();}}catch(e){}
-// Full compute in parallel
-showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');console.log('Data loaded:',Object.keys(DT));buildLayout();renderView();}catch(e){console.error('Init error:',e);$('#ct').innerHTML='<div class="ld">Error: '+e.message+'</div>';}}
-function showLoading(){const c=$('#ct');if(c)c.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px">Computing 8 layers (InteliRisk v4)...</div></div>';}
+PID=validPf.portfolio_id;showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');console.log('Data loaded:',Object.keys(DT));buildLayout();renderView();}catch(e){console.error('Init error:',e);$('#ct').innerHTML='<div class="ld">Error: '+e.message+'</div>';}}
+function showLoading(){const c=$('#ct');if(c)c.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px">Computing 8 layers (InteliRisk)...</div></div>';}
 async function recompute(){showLoading();try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();renderView();}catch(e){console.error(e);}}
 
 const TITLES={overview:'Dashboard Overview',risk:'Portfolio Risk Core',structural:'Structural & Network',factors:'African Factor Model',regime:'HMM Regime Detection',stress:'Stress Simulator',intel:'Intelligence Report',analytics:'Portfolio Analytics',holdings:'Portfolio Holdings',upload:'Upload Portfolio',trades:'Bloomberg & Live Data'};
 const NAVS=[{id:'overview',i:'◈',l:'Overview',s:'DASHBOARD'},{id:'analytics',i:'▣',l:'Analytics',s:'DASHBOARD'},{id:'risk',i:'△',l:'Risk Core',s:'ANALYTICS'},{id:'structural',i:'◎',l:'Structural',s:'ANALYTICS'},{id:'factors',i:'⊞',l:'Factors',s:'ANALYTICS'},{id:'regime',i:'◆',l:'Regime',s:'ANALYTICS'},{id:'stress',i:'⚡',l:'Stress Test',s:'ANALYTICS'},{id:'intel',i:'★',l:'Intelligence',s:'INSIGHTS'},{id:'holdings',i:'☰',l:'Holdings',s:'PORTFOLIO'},{id:'upload',i:'⊕',l:'Upload',s:'PORTFOLIO'},{id:'trades',i:'⇄',l:'Bloomberg',s:'DATA'}];
 
 function buildLayout(){const r=$('#root');r.innerHTML='';let cs='';const ne=[];NAVS.forEach(n=>{if(n.s!==cs){ne.push(el('div',{cl:'ns'},n.s));cs=n.s;}ne.push(el('div',{cl:'ni'+(n.id===VW?' on':''),onClick:()=>{VW=n.id;buildLayout();renderView();}},el('span',{cl:'ni-i'},n.i),el('span',null,n.l),n.id==='intel'&&DT.intelligence?el('span',{cl:'ni-b'},''+(DT.intelligence.alerts||[]).length):null));});
-r.appendChild(el('div',{cl:'app'},el('div',{cl:'sb'},el('div',{cl:'sb-hd'},el('div',{cl:'sb-logo'},'AfriSK'),el('div',{cl:'sb-tag'},'InteliRisk v4 Engine')),el('div',{cl:'sb-nav'},ne),el('div',{cl:'sb-ft'},el('div',{cl:'sb-u'},el('div',{cl:'sb-av'},(US||{}).username?US.username[0].toUpperCase():'?'),el('div',null,el('div',{cl:'sb-un'},(US||{}).username||''),el('div',{cl:'sb-ur'},((US||{}).role||'').replace(/_/g,' ')))))),el('div',{cl:'ma'},el('div',{cl:'tb'},el('div',{cl:'tb-t',id:'pt'},TITLES[VW]||''),el('div',{cl:'tb-r'},el('span',{cl:'tb-dot'}),el('span',{cl:'tb-st'},'Bloomberg'),el('button',{cl:'tbtn',onClick:recompute},'⟳ Refresh'),el('button',{cl:'tbtn tbtn-a',onClick:toggleChat},'◉ AI Assistant'))),el('div',{cl:'ct',id:'ct'})),el('div',{cl:'cp'+(CO?' open':''),id:'cpan'},el('div',{cl:'cp-h'},el('span',{cl:'cp-tt'},'AI Assistant'),el('button',{cl:'cp-x',onClick:toggleChat},'✕')),el('div',{cl:'cp-m',id:'cms'}),el('div',{cl:'cp-i'},el('textarea',{cl:'ci',id:'cin',placeholder:'Ask anything...',rows:'1',onKeydown:e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}}},),el('button',{cl:'cs',onClick:sendChat},'→'))),el('button',{cl:'cfab'+(CO?' hid':''),onClick:toggleChat},'◉')));refreshChatUI();}
+r.appendChild(el('div',{cl:'app'},el('div',{cl:'sb'},el('div',{cl:'sb-hd'},el('div',{cl:'sb-logo'},'AfriSK'),el('div',{cl:'sb-tag'},'Risk Intelligence Engine')),el('div',{cl:'sb-nav'},ne),el('div',{cl:'sb-ft'},el('div',{cl:'sb-u'},el('div',{cl:'sb-av'},(US||{}).username?US.username[0].toUpperCase():'?'),el('div',null,el('div',{cl:'sb-un'},(US||{}).username||''),el('div',{cl:'sb-ur'},((US||{}).role||'').replace(/_/g,' ')))))),el('div',{cl:'ma'},el('div',{cl:'tb'},el('div',{cl:'tb-t',id:'pt'},TITLES[VW]||''),el('div',{cl:'tb-r'},el('span',{cl:'tb-dot'}),el('span',{cl:'tb-st'},'Bloomberg'),el('button',{cl:'tbtn',onClick:recompute},'⟳ Refresh'),el('button',{cl:'tbtn tbtn-a',onClick:toggleChat},'◉ AI Assistant'))),el('div',{cl:'ct',id:'ct'})),el('div',{cl:'cp'+(CO?' open':''),id:'cpan'},el('div',{cl:'cp-h'},el('span',{cl:'cp-tt'},'AI Assistant'),el('button',{cl:'cp-x',onClick:toggleChat},'✕')),el('div',{cl:'cp-m',id:'cms'}),el('div',{cl:'cp-i'},el('textarea',{cl:'ci',id:'cin',placeholder:'Ask anything...',rows:'1',onKeydown:e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}}},),el('button',{cl:'cs',onClick:sendChat},'→'))),el('button',{cl:'cfab'+(CO?' hid':''),onClick:toggleChat},'◉')));refreshChatUI();}
 function toggleChat(){CO=!CO;const p=$('#cpan');if(p)p.classList.toggle('open',CO);const f=$('.cfab');if(f)f.classList.toggle('hid',CO);}
 async function sendChat(){const inp=$('#cin');if(!inp)return;const msg=inp.value.trim();if(!msg)return;CH.push({r:'user',t:msg});inp.value='';refreshChatUI();try{const res=await api('/api/v1/chat',{method:'POST',body:JSON.stringify({message:msg,portfolio_id:PID})});CH.push({r:'assistant',t:res.response});}catch(e){CH.push({r:'assistant',t:'Error: '+e.message});}refreshChatUI();}
 function refreshChatUI(){const c=$('#cms');if(!c)return;c.innerHTML='';CH.forEach(m=>{const d=document.createElement('div');d.className='cm '+(m.r==='user'?'cm-u':'cm-a');d.textContent=m.t;c.appendChild(d);});c.scrollTop=c.scrollHeight;}
@@ -356,7 +352,7 @@ console.error('Analytics:',e);
 function vRisk(ct){
 const rc=DT.risk_core||{},p=rc.portfolio||{},ms=rc.market_summary||{};
 ct.appendChild(el('div',{cl:'g4 mb'},kpi('Mean Vol',p.mean_vol_21d||0,'%','var(--bl)','21d'),kpi('Mean VaR',p.mean_var||0,'%','var(--rd)','Hist 5%'),kpi('Mean CVaR',p.mean_cvar||0,'%','var(--rd)','Exp Shortfall'),kpi('Worst DD',p.worst_dd||0,'%','var(--or)','Peak-Trough')));
-ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Market Risk Metrics (InteliRisk v4: HAR-RV + EVT/GPD + Cornish-Fisher)')),
+ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Market Risk Metrics (InteliRisk: HAR-RV + EVT/GPD + Cornish-Fisher)')),
 el('table',{cl:'dt'},el('thead',null,el('tr',null,...['Market','Vol 21d','Vol 63d','HAR fc','R²','VaR 5%','CVaR','EVT VaR','MaxDD','JB Non-Norm'].map(t=>el('th',null,t)))),
 el('tbody',null,...Object.entries(ms).map(([m,d])=>el('tr',null,el('td',{st:{fontWeight:'500',color:'var(--t1)'}},d.name||m),el('td',{cl:'mn',st:{color:'var(--bl)'}},fmtPct(d.vol_21d)),el('td',{cl:'mn'},fmtPct(d.vol_63d)),el('td',{cl:'mn',st:{color:'var(--pu)'}},fmtPct(d.har_forecast)),el('td',{cl:'mn'},fmt(d.har_r2,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_var,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_cvar,3)),el('td',{cl:'mn'},d.evt_var!=null?fmt(d.evt_var,3):'—'),el('td',{cl:'mn',st:{color:'var(--or)'}},fmtPct(d.max_dd)),el('td',null,d.non_normal?'✓ Fat tails':'Normal')))))));
 ct.appendChild(el('div',{cl:'g2'},el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Component VaR')),el('div',{cl:'cc'},el('canvas',{id:'rk1'}))),el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Return Distribution'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'KDE + VaR/CVaR')),el('div',{cl:'cc'},el('canvas',{id:'rk2'})))));
@@ -1043,11 +1039,11 @@ const aiSrc=it.ai_source||'Rule Engine';
 const hmmF=it.hmm_features||0;
 const regDur=it.regime_duration||0;
 
-// Header with AI source badge
-ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Intelligence Report'),
+// Header with AI source badge — large dynamic display
+ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{st:{fontSize:'12px',fontWeight:'700',color:'var(--t1)',textTransform:'uppercase',letterSpacing:'1px'}},'Intelligence Report'),
 el('span',{st:{fontSize:'8px',padding:'2px 8px',borderRadius:'10px',background:'rgba(212,151,58,.15)',color:'var(--ac)',marginLeft:'8px',fontFamily:'JetBrains Mono'}},aiSrc),
 el('span',{cl:'cd-b',st:{background:it.color||'var(--ac)',color:'var(--b0)'}},it.level||'')),
-el('div',{st:{fontSize:'13px',fontWeight:'700',lineHeight:'1.6',marginBottom:'10px',color:'var(--t1)'}},it.headline||''),
+el('div',{st:{fontSize:'16px',fontWeight:'700',lineHeight:'1.5',marginBottom:'12px',color:'var(--t1)',padding:'8px 0'}},it.headline||''),
 
 // KPI row — 6 metrics
 el('div',{st:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:'6px',marginBottom:'10px'}},
@@ -1120,11 +1116,11 @@ el('div',{st:{fontSize:'9px'}},el('span',{st:{color:'var(--t3)'}},'Scenarios: ')
 // Inline Intelligence Chat
 const chatBox=el('div',{cl:'cd mb fi'},
 el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Portfolio AI Chat'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'8px'}},'Ask about risk, factors, regime, holdings, or any portfolio question')),
-el('div',{id:'intel-chat-msgs',st:{maxHeight:'320px',overflowY:'auto',marginBottom:'10px',minHeight:'60px',padding:'8px',background:'var(--b0)',borderRadius:'6px',border:'1px solid var(--bd)'}},
+el('div',{id:'intel-chat-msgs',st:{maxHeight:'400px',overflowY:'auto',marginBottom:'10px',minHeight:'80px',padding:'10px',background:'var(--b0)',borderRadius:'6px',border:'1px solid var(--bd)'}},
 el('div',{st:{fontSize:'10px',color:'var(--t3)',padding:'12px',textAlign:'center',lineHeight:'1.6'}},'Ask any question about your portfolio, risk analysis, regime detection, factor exposures, or recommendations...')),
 el('div',{st:{display:'flex',gap:'8px',alignItems:'flex-end'}},
-el('textarea',{id:'intel-chat-input',st:{flex:'1',background:'var(--b0)',border:'1px solid var(--bd)',borderRadius:'6px',padding:'10px 12px',color:'var(--t1)',fontSize:'11px',outline:'none',resize:'vertical',minHeight:'44px',maxHeight:'100px',fontFamily:'DM Sans, sans-serif',lineHeight:'1.5'},placeholder:'e.g., Why is the regime Sovereign Stress? What should I do about my mining exposure?',rows:'2',onKeyDown:function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();intelChatSend();}}}),
-el('button',{cl:'btn',st:{padding:'10px 16px',fontSize:'10px',borderRadius:'6px',whiteSpace:'nowrap',height:'44px'},onClick:intelChatSend},'Send'))
+el('textarea',{id:'intel-chat-input',st:{flex:'1',background:'var(--b0)',border:'1px solid var(--bd)',borderRadius:'6px',padding:'10px 12px',color:'var(--t1)',fontSize:'11px',outline:'none',resize:'vertical',minHeight:'60px',maxHeight:'120px',fontFamily:'DM Sans, sans-serif',lineHeight:'1.5'},placeholder:'e.g., Why is the regime Sovereign Stress? What should I do about my mining exposure?',rows:'3',onKeyDown:function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();intelChatSend();}}}),
+el('button',{st:{width:'40px',height:'40px',minWidth:'40px',background:'var(--ac)',color:'var(--b0)',border:'none',borderRadius:'6px',fontWeight:'700',cursor:'pointer',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'},onClick:intelChatSend},'→'))
 );
 ct.appendChild(chatBox);
 }
@@ -1330,10 +1326,10 @@ async function fetchAndRender(){
     const srcClr=src==='bloomberg'?'var(--gn)':src==='tws'?'var(--gn)':src==='csv'?'var(--ac)':'var(--or)';
     srcCard.appendChild(el('div',{st:{fontSize:'15px',fontWeight:'600',color:srcClr,marginBottom:'4px',textTransform:'uppercase'}},src==='tws'?'TWS (IBKR)':src));
     srcCard.appendChild(el('div',{st:{fontSize:'10px',color:'var(--t2)',lineHeight:'1.5'}},
-      src==='bloomberg'?'Live Bloomberg BLPAPI feed → InteliRisk v4 pipeline':
-      src==='tws'?'IBKR TWS historical data + CSV → InteliRisk v4 pipeline':
-      src==='csv'?'Historical CSV files (data/intellirisk/) → InteliRisk v4 pipeline':
-      'Synthetic regime-switching GBM → InteliRisk v4 pipeline'));
+      src==='bloomberg'?'Live Bloomberg BLPAPI feed → InteliRisk pipeline':
+      src==='tws'?'IBKR TWS historical data + CSV → InteliRisk pipeline':
+      src==='csv'?'Historical CSV files (data/intellirisk/) → InteliRisk pipeline':
+      'Synthetic regime-switching GBM → InteliRisk pipeline'));
     if(st.tws_connected)srcCard.appendChild(el('div',{st:{fontSize:'8px',color:'var(--gn)',marginTop:'4px'}},'◉ TWS Connected'));
     srcCard.appendChild(el('button',{cl:'tbtn',st:{marginTop:'8px',fontSize:'9px'},onClick:async()=>{
       try{await api('/api/v1/bloomberg/refresh',{method:'POST'});await recompute();}catch(e){}
