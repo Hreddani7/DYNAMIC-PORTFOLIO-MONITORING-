@@ -99,18 +99,7 @@ function drawGauge(id,score,level,color){const cv=document.getElementById(id);if
 // LOGIN
 function showLogin(){$('#root').innerHTML='';$('#root').appendChild(el('div',{cl:'lw'},el('div',{cl:'lb'},el('div',{cl:'lb-logo'},'AfriSK'),el('div',{cl:'lb-sub'},'African Structural Risk Intelligence — InteliRisk Engine'),el('div',{cl:'fg'},el('label',{cl:'fl'},'Username'),el('input',{cl:'fin',id:'lu',type:'text',value:'admin'})),el('div',{cl:'fg'},el('label',{cl:'fl'},'Password'),el('input',{cl:'fin',id:'lp',type:'password',value:'admin123'})),el('div',{id:'le',cl:'lerr'}),el('button',{cl:'btn',id:'lbtn',onClick:doLogin},'Sign In'),el('div',{cl:'lhint'},'admin/admin123 · institution/inst123 · retail/retail123'))));document.querySelectorAll('.fin').forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()}));}
 async function doLogin(){const b=$('#lbtn');b.disabled=true;b.textContent='Authenticating...';try{const d=await api('/api/v1/auth/login',{method:'POST',body:JSON.stringify({username:$('#lu').value,password:$('#lp').value})});TK=d.access_token;US={username:d.username,role:d.role};await initApp();}catch(e){$('#le').textContent='Invalid credentials';b.disabled=false;b.textContent='Sign In';}}
-async function initApp(){buildLayout();try{const pr=await api('/api/v1/portfolios');if(!pr.portfolios.length||!pr.portfolios.some(p=>p.n_holdings>0)){
-// No portfolio uploaded — show Upload view
-PID=null;DT={};VW='upload';buildLayout();renderView();return;
-}
-// Portfolio exists — still go to Upload page first so user can manage portfolio
-// They can navigate to Overview after reviewing/updating their holdings
-const validPf=pr.portfolios.find(p=>p.n_holdings>0)||pr.portfolios[0];
-PID=validPf.portfolio_id;
-// Pre-compute in background, but show Upload page first
-VW='upload';buildLayout();renderView();
-// Background compute so data is ready when they navigate
-api('/api/v1/portfolios/'+PID+'/compute-all').then(d=>{DT=d;console.log('Data loaded:',Object.keys(DT));}).catch(e=>console.warn('Background compute:',e.message));}catch(e){console.error('Init error:',e);VW='upload';buildLayout();renderView();}}
+async function initApp(){VW='upload';buildLayout();renderView();}
 function showLoading(){const c=$('#ct');if(c)c.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px">Computing 8 layers (InteliRisk)...</div></div>';}
 async function recompute(){showLoading();try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();renderView();}catch(e){console.error(e);}}
 
@@ -124,11 +113,11 @@ async function sendChat(){const inp=$('#cin');if(!inp)return;const msg=inp.value
 function refreshChatUI(){const c=$('#cms');if(!c)return;c.innerHTML='';CH.forEach(m=>{const d=document.createElement('div');d.className='cm '+(m.r==='user'?'cm-u':'cm-a');d.textContent=m.t;c.appendChild(d);});c.scrollTop=c.scrollHeight;}
 
 function renderView(){const ct=$('#ct');if(!ct)return;ct.innerHTML='';destroyCharts();if(_liveTimer&&VW!=='trades'){clearInterval(_liveTimer);_liveTimer=null;}
-// If no portfolio loaded and not on upload/trades page, show empty state
-if(!PID&&VW!=='upload'&&VW!=='trades'){ct.appendChild(el('div',{st:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'400px',gap:'16px'}},
-el('div',{st:{fontSize:'48px',opacity:'0.3'}},'\u2191'),
-el('div',{st:{fontSize:'14px',color:'var(--t2)',fontWeight:'500'}},'No Portfolio Loaded'),
-el('div',{st:{fontSize:'11px',color:'var(--t3)',maxWidth:'300px',textAlign:'center',lineHeight:'1.6'}},'Upload your portfolio (CSV/Excel) to start monitoring. Go to Upload to import your holdings.'),
+// If no portfolio loaded or no computed data, and not on upload/trades page, show empty state
+if((!PID||!DT||!Object.keys(DT).length)&&VW!=='upload'&&VW!=='trades'&&VW!=='holdings'){ct.appendChild(el('div',{st:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'400px',gap:'16px'}},
+el('div',{st:{fontSize:'48px',opacity:'0.3'}},'⊕'),
+el('div',{st:{fontSize:'14px',color:'var(--t2)',fontWeight:'500'}},'No Portfolio Data'),
+el('div',{st:{fontSize:'11px',color:'var(--t3)',maxWidth:'340px',textAlign:'center',lineHeight:'1.6'}},'Upload your portfolio first. The risk engine will compute all 8 layers and you\'ll see the full analysis here.'),
 el('button',{cl:'btn',st:{marginTop:'8px'},onClick:()=>{VW='upload';buildLayout();renderView();}},'Go to Upload')
 ));return;}
 try{({overview:vOverview,analytics:vAnalytics,risk:vRisk,structural:vStructural,factors:vFactors,regime:vRegime,stress:vStress,intel:vIntel,holdings:vHoldings,upload:vUpload,trades:vTrades}[VW]||vOverview)(ct);}catch(e){console.error('View ['+VW+']:',e);ct.innerHTML='<div class="ld" style="color:var(--rd)">Error: '+e.message+'</div>';}}
@@ -1448,7 +1437,12 @@ el('input',{type:'file',id:'up-file',accept:'.csv,.xlsx,.xls,.tsv',st:{display:'
 el('div',{id:'up-status',st:{fontSize:'10px',color:'var(--t3)',minHeight:'20px'}}),
 el('div',{st:{marginTop:'10px',display:'flex',gap:'8px'}},
 el('button',{cl:'btn',st:{width:'auto',padding:'8px 16px',fontSize:'11px',background:'var(--b3)',color:'var(--t2)',border:'1px solid var(--bd)'},onClick:async()=>{
-try{const r=await api('/api/v1/portfolios/create-sample',{method:'POST'});PID=r.portfolio_id;showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();VW='overview';renderView();}catch(e){alert('Error: '+e.message);}
+try{const r=await api('/api/v1/portfolios/create-sample',{method:'POST'});PID=r.portfolio_id;
+const st=document.getElementById('up-status');
+if(st){st.innerHTML='<div style="padding:10px;background:rgba(45,212,160,.08);border-radius:6px;border:1px solid rgba(45,212,160,.25)"><span style="color:var(--gn);font-weight:600">✓ Sample portfolio created</span> — '+r.holdings+' holdings</div>';
+doComputeWithProgress(st);}
+else{showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();VW='overview';renderView();}
+}catch(e){alert('Error: '+e.message);}
 }},'Use Sample Portfolio'),
 el('button',{cl:'btn',st:{width:'auto',padding:'8px 16px',fontSize:'11px',background:'var(--b3)',color:'var(--ac)',border:'1px solid var(--ac)'},onClick:()=>{
 const csv='symbol,market,quantity,price,currency,sector\nNPN,JSE,100,3200,ZAR,Technology\nSBK,JSE,500,180,ZAR,Banking\nAGL,JSE,200,850,ZAR,Mining\nBHP,JSE,50,4500,ZAR,Mining\nFSR,JSE,300,150,ZAR,Banking\nMTN,JSE,150,1200,ZAR,Telecom\nSOL,JSE,100,750,ZAR,Energy\nAMS,JSE,80,2100,ZAR,Mining\nIMP,JSE,200,400,ZAR,Mining\nUSDZAR,FX,10000,18.5,USD,Currency';
@@ -1476,6 +1470,43 @@ el('tr',null,el('td',{cl:'mn'},'MTN'),el('td',null,'JSE'),el('td',{cl:'mn'},'150
 el('tr',null,el('td',{cl:'mn'},'SOL'),el('td',null,'JSE'),el('td',{cl:'mn'},'100'),el('td',{cl:'mn'},'750'),el('td',null,'ZAR'),el('td',null,'Energy'))))))));
 }
 
+async function doComputeWithProgress(parentEl){
+if(!PID||!parentEl)return;
+const LAYERS=[
+{name:'Layer 0: HAR-RV Volatility & VaR/CVaR',time:800},
+{name:'Layer 2: PCA Structural & Correlation Network',time:1200},
+{name:'Layer 3: 6-Factor African Model',time:1000},
+{name:'Layer 4: HMM Regime Detection (30 features)',time:3000},
+{name:'Layer 5: Composite Risk Score',time:500},
+{name:'Layer 6: Stress Testing (10 scenarios)',time:1500},
+{name:'Layer 7: AI Intelligence Report',time:800},
+{name:'Layer 8: Portfolio Analytics',time:600}
+];
+const progDiv=document.createElement('div');
+progDiv.style.cssText='margin-top:10px;padding:14px;background:var(--b1);border-radius:8px;border:1px solid var(--bd)';
+progDiv.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--ac);margin-bottom:10px">Computing Risk Layers...</div>';
+parentEl.appendChild(progDiv);
+let layerIdx=0;
+const showLayer=()=>{if(layerIdx>=LAYERS.length)return;
+const l=LAYERS[layerIdx];
+const row=document.createElement('div');
+row.style.cssText='display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t3);margin-top:5px';
+row.innerHTML='<div class="sp" style="width:10px;height:10px;border-width:2px"></div> '+l.name;
+progDiv.appendChild(row);
+layerIdx++;
+if(layerIdx<LAYERS.length)setTimeout(showLayer,l.time);
+};
+setTimeout(showLayer,300);
+try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');
+// Mark all layers done
+progDiv.querySelectorAll('.sp').forEach(s=>{s.className='';s.style.cssText='width:10px;height:10px;font-size:10px;color:var(--gn)';s.textContent='✓';});
+const rows=progDiv.querySelectorAll('div[style*="color:var(--t3)"]');
+rows.forEach(d=>{if(d.querySelector&&!d.querySelector('div'))d.style.color='var(--gn)';});
+progDiv.innerHTML+='<div style="margin-top:10px;color:var(--gn);font-weight:600;font-size:11px">✓ All 8 layers computed. Redirecting to Dashboard...</div>';
+setTimeout(()=>{buildLayout();VW='overview';renderView();},1200);
+}catch(e){progDiv.innerHTML+='<div style="margin-top:8px;color:var(--rd);font-size:10px">Error: '+e.message+'. Try refreshing.</div>';}
+}
+
 async function doUpload(file){
 const status=document.getElementById('up-status');
 if(!status)return;
@@ -1500,14 +1531,8 @@ return;}
 PID=d.portfolio_id;
 const mkts=Object.keys(d.markets_found||{}).join(', ')||'auto-detected';
 status.innerHTML='<div style="padding:12px;background:rgba(45,212,160,.08);border-radius:6px;border:1px solid rgba(45,212,160,.25)"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:22px;color:var(--gn)">&#10003;</span><span style="font-weight:600;color:var(--gn);font-size:12px">Portfolio Loaded Successfully</span></div><div style="font-size:10px;color:var(--t2)">'+d.holdings_count+' holdings detected on '+mkts+'</div></div>';
-// Auto compute after 1s
-setTimeout(async()=>{
-status.innerHTML+='<div style="margin-top:8px;color:var(--ac);display:flex;align-items:center;gap:6px;font-size:10px"><div class="sp" style="width:12px;height:12px;border-width:2px"></div> Processing 8 risk layers...</div>';
-try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');
-status.innerHTML+='<div style="margin-top:4px;color:var(--gn);font-size:10px">&#10003; All layers computed. Redirecting...</div>';
-setTimeout(()=>{buildLayout();VW='overview';renderView();},800);
-}catch(e2){status.innerHTML+='<div style="margin-top:4px;color:var(--rd);font-size:10px">Processing error: '+e2.message+'. Try refreshing.</div>';}
-},1000);
+// Auto compute with layer progress
+doComputeWithProgress(status);
 }catch(e){status.innerHTML='<div style="color:var(--rd);padding:10px;background:rgba(240,96,96,.08);border-radius:6px;border:1px solid rgba(240,96,96,.2)"><div style="font-weight:600;margin-bottom:4px">Upload Failed</div><div style="font-size:10px">'+e.message+'</div><div style="font-size:9px;color:var(--t3);margin-top:4px">Check your connection and try again.</div></div>';}
 }
 

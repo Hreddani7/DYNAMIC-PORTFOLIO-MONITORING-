@@ -341,13 +341,15 @@ TICKER_TO_INTERNAL = {
     "SOL": "Sasol",
     # Retail / Consumer
     "SHP": "Shoprite", "MRP": "MrPrice", "WHL": "Woolworths",
-    "TBS": "TigerBrands", "PIK": "PicknPay",
+    "TBS": "TigerBrands", "PIK": "PicknPay", "TFG": "Foschini",
     # Healthcare
     "APN": "Aspen",
     # Industrials
     "MNP": "Mondi", "BID": "BidCorp",
     # REITs
-    "GRT": "Growthpoint",
+    "GRT": "Growthpoint", "VKE": "Vukile", "EMI": "Emira",
+    # Consumer Staples
+    "SPP": "Spar",
     # Media
     "MCG": "MultiChoice",
     # CSE (Morocco)
@@ -405,43 +407,63 @@ def _build_portfolio_prices(holdings):
             price_dict[ticker] = matched_series
 
     # For unmatched holdings, generate synthetic correlated series from JSE index
-    # so all 10 holdings are represented in the analysis
-    if price_dict:
-        # Get a reference series (longest available matched stock or JSE index)
-        ref = None
-        for tk, s in sorted(price_dict.items(), key=lambda x: len(x[1]), reverse=True):
-            if len(s) >= 100:
-                ref = s
-                break
-        if ref is None:
-            # Use JSE index from market prices
-            from app.ingestion import generate_prices
-            mp = generate_prices()
-            if mp is not None and "JSE_SA" in mp.columns:
-                ref = mp["JSE_SA"]
+    # so all holdings are represented in the analysis
+    # Get a reference series (longest available matched stock or JSE index)
+    ref = None
+    for tk, s in sorted(price_dict.items(), key=lambda x: len(x[1]), reverse=True):
+        if len(s) >= 100:
+            ref = s
+            break
+    if ref is None:
+        # Use JSE index from market prices as reference
+        from app.ingestion import generate_prices
+        mp = generate_prices()
+        if mp is not None and "JSE_SA" in mp.columns:
+            ref = mp["JSE_SA"]
 
-        if ref is not None and len(ref) >= 100:
-            np.random.seed(42)
-            # Sector-based vol/beta for synthetic generation
-            SYNTH_PARAMS = {
-                "Richemont": {"beta": 0.9, "vol": 0.018, "base": 2200},
-                "GoldFields": {"beta": 1.3, "vol": 0.025, "base": 320},
-                "Shoprite": {"beta": 0.7, "vol": 0.014, "base": 310},
-                "BAT": {"beta": 0.6, "vol": 0.012, "base": 650},
-            }
-            ref_ret = np.log(ref / ref.shift(1)).dropna()
-            for h in holdings:
-                ticker = h.get("asset_id", "").split(".")[0].upper()
-                if ticker not in price_dict:
-                    internal = TICKER_TO_INTERNAL.get(ticker, ticker)
-                    params = SYNTH_PARAMS.get(internal, {"beta": 0.8, "vol": 0.015, "base": 500})
-                    # Correlated synthetic: beta * ref_return + idio noise
-                    synth_ret = params["beta"] * ref_ret + params["vol"] * np.random.randn(len(ref_ret))
-                    synth_price = params["base"] * np.exp(synth_ret.cumsum())
-                    synth_price.name = ticker
-                    price_dict[ticker] = synth_price
-                    h["_price_series"] = synth_price
-                    h["_synthetic"] = True
+    if ref is not None and len(ref) >= 100:
+        np.random.seed(42)
+        # Sector-based vol/beta for synthetic generation
+        SECTOR_SYNTH = {
+            "Mining": {"beta": 1.2, "vol": 0.022},
+            "Mining & Resources": {"beta": 1.2, "vol": 0.022},
+            "Banking": {"beta": 0.9, "vol": 0.016},
+            "Financials": {"beta": 0.85, "vol": 0.015},
+            "Technology": {"beta": 1.1, "vol": 0.020},
+            "Telecom": {"beta": 0.8, "vol": 0.014},
+            "Energy": {"beta": 1.0, "vol": 0.018},
+            "Consumer Discretionary": {"beta": 0.75, "vol": 0.013},
+            "Consumer Staples": {"beta": 0.6, "vol": 0.011},
+            "Healthcare": {"beta": 0.7, "vol": 0.014},
+            "Industrials": {"beta": 0.85, "vol": 0.015},
+            "Real Estate": {"beta": 0.65, "vol": 0.016},
+        }
+        INTERNAL_SYNTH = {
+            "Richemont": {"beta": 0.9, "vol": 0.018, "base": 2200},
+            "GoldFields": {"beta": 1.3, "vol": 0.025, "base": 320},
+            "Shoprite": {"beta": 0.7, "vol": 0.014, "base": 310},
+            "BAT": {"beta": 0.6, "vol": 0.012, "base": 650},
+        }
+        ref_ret = np.log(ref / ref.shift(1)).dropna()
+        for h in holdings:
+            ticker = h.get("asset_id", "").split(".")[0].upper()
+            if ticker not in price_dict:
+                internal = TICKER_TO_INTERNAL.get(ticker, ticker)
+                # Try specific internal name params, else use sector-based params
+                if internal in INTERNAL_SYNTH:
+                    params = INTERNAL_SYNTH[internal]
+                else:
+                    sector = h.get("sector", "")
+                    sp = SECTOR_SYNTH.get(sector, {"beta": 0.8, "vol": 0.015})
+                    price_val = h.get("price", 0) or 500
+                    params = {**sp, "base": max(price_val, 10)}
+                # Correlated synthetic: beta * ref_return + idio noise
+                synth_ret = params["beta"] * ref_ret + params["vol"] * np.random.randn(len(ref_ret))
+                synth_price = params["base"] * np.exp(synth_ret.cumsum())
+                synth_price.name = ticker
+                price_dict[ticker] = synth_price
+                h["_price_series"] = synth_price
+                h["_synthetic"] = True
 
     # Build portfolio-level price DataFrame
     if price_dict:
