@@ -283,13 +283,48 @@ def _load_real_data():
 def _load_ibkr_data():
     """Attempt to load price, macro, and stock data from TWS.
     Returns (price_df, macro_df, stocks_dict) or (None, None, {}).
+    Uses a thread with timeout to avoid blocking if TWS hangs.
     """
     try:
+        import socket
+        # Quick-check if TWS port is open (1s timeout)
+        try:
+            _sock = socket.create_connection(("127.0.0.1", 7497), timeout=1)
+            _sock.close()
+        except (ConnectionRefusedError, OSError, socket.timeout):
+            return None, None, {}
+
         from app.ibkr import get_ibkr
         from app.ibkr.tws import IBKR_STOCK_MAP
-        # Don't auto-connect on startup — only use TWS if already connected
-        ibkr = get_ibkr(auto_connect=False)
-        if not ibkr.is_connected():
+
+        # Run connection + fetch in a thread with 15s timeout
+        import threading
+        _result = [None, None, {}]
+        _error = [None]
+
+        def _tws_worker():
+            try:
+                ibkr = get_ibkr(auto_connect=True)
+                if not ibkr.is_connected():
+                    return
+                prices_d, macro_d, stocks_raw = ibkr.fetch_all_historical()
+                _result[0] = prices_d
+                _result[1] = macro_d
+                _result[2] = stocks_raw or {}
+            except Exception as e:
+                _error[0] = e
+
+        t = threading.Thread(target=_tws_worker, daemon=True)
+        t.start()
+        t.join(timeout=15)
+        if t.is_alive():
+            log.warning("[INGEST] TWS connection timed out (15s)")
+            return None, None, {}
+        if _error[0]:
+            raise _error[0]
+
+        prices_d, macro_d, stocks_raw = _result
+        if not prices_d and not macro_d:
             return None, None, {}
 
         prices_d, macro_d, stocks_raw = ibkr.fetch_all_historical()

@@ -401,7 +401,7 @@ const rc=DT.risk_core||{},p=rc.portfolio||{},ms=rc.market_summary||{};
 ct.appendChild(el('div',{cl:'g4 mb'},kpi('Mean Vol',p.mean_vol_21d||0,'%','var(--bl)','21d'),kpi('Mean VaR',p.mean_var||0,'%','var(--rd)','Hist 5%'),kpi('Mean CVaR',p.mean_cvar||0,'%','var(--rd)','Exp Shortfall'),kpi('Worst DD',p.worst_dd||0,'%','var(--or)','Peak-Trough')));
 ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Market Risk Metrics (InteliRisk: HAR-RV + EVT/GPD + Cornish-Fisher)')),
 el('table',{cl:'dt'},el('thead',null,el('tr',null,...['Market','Vol 21d','Vol 63d','HAR fc','R²','VaR 5%','CVaR','EVT VaR','MaxDD','JB Non-Norm'].map(t=>el('th',null,t)))),
-el('tbody',null,...Object.entries(ms).map(([m,d])=>el('tr',null,el('td',{st:{fontWeight:'500',color:'var(--t1)'}},d.name||m),el('td',{cl:'mn',st:{color:'var(--bl)'}},fmtPct(d.vol_21d)),el('td',{cl:'mn'},fmtPct(d.vol_63d)),el('td',{cl:'mn',st:{color:'var(--pu)'}},fmtPct(d.har_forecast)),el('td',{cl:'mn'},fmt(d.har_r2,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_var,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_cvar,3)),el('td',{cl:'mn'},d.evt_var!=null?fmt(d.evt_var,3):'—'),el('td',{cl:'mn',st:{color:'var(--or)'}},fmtPct(d.max_dd)),el('td',null,d.non_normal?'✓ Fat tails':'Normal')))))));
+el('tbody',null,...Object.entries(ms).map(([m,d])=>el('tr',null,el('td',{st:{fontWeight:'500',color:'var(--t1)'}},d.name||m),el('td',{cl:'mn',st:{color:'var(--bl)'}},fmtPct(d.vol_21d)),el('td',{cl:'mn'},fmtPct(d.vol_63d)),el('td',{cl:'mn',st:{color:'var(--pu)'}},fmtPct(d.har_forecast)),el('td',{cl:'mn'},fmt(d.har_r2,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_var,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_cvar,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.evt_var||0,3)),el('td',{cl:'mn',st:{color:'var(--or)'}},fmtPct(d.max_dd)),el('td',null,d.non_normal?'✓ Fat tails':'Normal')))))));
 ct.appendChild(el('div',{cl:'g2'},el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Component VaR')),el('div',{cl:'cc'},el('canvas',{id:'rk1'}))),el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Return Distribution'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'KDE + VaR/CVaR')),el('div',{cl:'cc'},el('canvas',{id:'rk2'})))));
 setTimeout(()=>{const cv=rc.component_var||{};const _nc={};((DT.structural||{}).network||{}).nodes&&(DT.structural.network.nodes||[]).forEach(n=>{_nc[n.id]=n.color;});if(Object.keys(cv).length)mkHBar('rk1',Object.keys(cv).map(k=>(DT.risk_core.market_summary[k]||{}).short||k),Object.values(cv).map(v=>v*100),Object.keys(cv).map(k=>_nc[k]||MARKETS[k]&&MARKETS[k].color||'#5896f0'));const ts=rc.time_series||{};if(ts.returns&&ts.returns.length){
 // Build KDE (Gaussian kernel density estimation) for smooth distribution
@@ -1293,7 +1293,7 @@ el('td',{cl:'mn'},fmt(x.price,2)),
 el('td',{cl:'mn',st:{color:'var(--ac)',fontWeight:'500'}},Math.round(x.market_value||0).toLocaleString()),
 el('td',{cl:'mn'},(w*100).toFixed(1)+'%')];
 if(hasRisk){
-cells.push(el('td',{cl:'mn',st:{color:rm.vol_21d>30?'var(--rd)':'var(--t2)'}},rm.data_matched?fmtPct(rm.vol_21d):'—'));
+cells.push(el('td',{cl:'mn',st:{color:'var(--rd)'}},rm.data_matched?fmtPct(rm.vol_21d):'—'));
 cells.push(el('td',{cl:'mn',st:{color:'var(--rd)'}},rm.data_matched?fmt(rm.var_5pct,3):'—'));
 cells.push(el('td',{cl:'mn',st:{color:'var(--rd)'}},rm.data_matched?fmt(rm.cvar_5pct,3):'—'));
 cells.push(el('td',{cl:'mn',st:{color:'var(--or)'}},rm.data_matched?fmtPct(rm.max_dd):'—'));

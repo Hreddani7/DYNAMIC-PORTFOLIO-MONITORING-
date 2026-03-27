@@ -694,22 +694,26 @@ def bloomberg_macro():
 
 
 @api.route("/bloomberg/refresh", methods=["POST", "OPTIONS"])
+@api.route("/data/refresh", methods=["POST", "OPTIONS"])
 @token_required
 def bloomberg_refresh():
-    """Force-clear the data cache and re-fetch from Bloomberg (or CSV)."""
+    """Force-clear the data cache and re-fetch from Bloomberg/TWS/CSV."""
     if request.method == "OPTIONS":
         return "", 204
     clear_cache()
     try:
         p = generate_prices()
         m = generate_macro()
-        blp = get_bloomberg()
+        source = get_data_source()
+        stocks = generate_stocks_per_market()
+        stock_count = sum(len(sd) for sd in stocks.values()) if stocks else 0
         return jsonify({
             "status":      "refreshed",
-            "source":      "bloomberg" if blp.is_connected() else "csv_or_synthetic",
+            "source":      source,
             "prices_rows": len(p),
             "macro_cols":  list(m.columns),
             "markets":     list(p.columns),
+            "stocks_loaded": stock_count,
             "timestamp":   datetime.now().isoformat(),
         })
     except Exception as exc:
