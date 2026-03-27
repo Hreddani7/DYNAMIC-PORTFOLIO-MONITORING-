@@ -118,12 +118,13 @@ def _build_risk_json(l0_data, l2_data, l3_data, l4_data, l5_data, l6_data):
             "n_stocks": herding.get("n_stocks", 0),
         },
         "portfolio_risk": {
-            "vol_21d": round(portfolio.get("vol_21d", 0), 6),
-            "vol_63d": round(portfolio.get("vol_63d", 0), 6),
+            # L0 uses mean_vol_21d / mean_var / mean_cvar / worst_dd
+            "vol_21d": round(portfolio.get("mean_vol_21d", portfolio.get("vol_21d", 0)) / 100, 6),
+            "vol_63d": round(portfolio.get("mean_vol_63d", portfolio.get("vol_63d", 0)) / 100, 6),
             "har_forecast": round(portfolio.get("har_forecast", 0), 6),
-            "max_drawdown": round(portfolio.get("max_dd", 0), 4),
-            "var_5pct": round(portfolio.get("current_var", 0), 4),
-            "cvar_5pct": round(portfolio.get("current_cvar", 0), 4),
+            "max_drawdown": round(portfolio.get("worst_dd", portfolio.get("max_dd", 0)) / 100, 4),
+            "var_5pct": round(portfolio.get("mean_var", portfolio.get("current_var", 0)) / 100, 4),
+            "cvar_5pct": round(portfolio.get("mean_cvar", portfolio.get("current_cvar", 0)) / 100, 4),
             "skewness": round(portfolio.get("skewness", 0), 4),
             "kurtosis": round(portfolio.get("kurtosis", 0), 4),
             "herfindahl": round(l0_data.get("herfindahl", 0), 4),

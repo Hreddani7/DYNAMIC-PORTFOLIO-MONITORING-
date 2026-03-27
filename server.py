@@ -38,7 +38,7 @@ def static_files(path): return send_from_directory(static_dir, path)
 
 if __name__ == "__main__":
     print("=" * 55)
-    print("  AfriSK — InteliRisk v4 Engine")
+    print("  AfriSK — Risk Intelligence Engine")
     print("=" * 55)
     init_db()
     clear_all_portfolios()  # Start fresh — no pre-existing portfolios
@@ -47,6 +47,6 @@ if __name__ == "__main__":
     print(f"[API]  /api/v1 ready (upload, compute, chat)")
     print("-" * 55)
     print("  http://localhost:5000")
-    print("  admin/admin123 | institution/inst123 | retail/retail123")
+    print("  admin/admin123 (or create account)")
     print("=" * 55)
     app.run(host="0.0.0.0", port=5000, debug=False)

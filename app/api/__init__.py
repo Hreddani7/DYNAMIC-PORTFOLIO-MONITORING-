@@ -226,8 +226,74 @@ def login():
     data = request.get_json()
     user = authenticate_user(data.get("username", ""), data.get("password", ""))
     if not user: return jsonify({"error": "Invalid credentials"}), 401
+    # Check if 2FA is enabled
+    if user.get("totp_enabled"):
+        totp_code = data.get("totp_code")
+        if not totp_code:
+            return jsonify({"requires_2fa": True, "username": user["username"]}), 200
+        from app.db import verify_totp
+        if not verify_totp(user.get("totp_secret", ""), totp_code):
+            return jsonify({"error": "Invalid 2FA code"}), 401
     return jsonify({"access_token": create_token(user), "role": user["role"],
                     "username": user["username"], "user_id": user["user_id"]})
+
+@api.route("/auth/register", methods=["POST", "OPTIONS"])
+def register():
+    if request.method == "OPTIONS": return "", 204
+    data = request.get_json()
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip()
+    password = data.get("password", "")
+    if not username or not email or not password:
+        return jsonify({"error": "Username, email, and password are required"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+    try:
+        from app.db import create_user
+        uid = create_user(username, email, password)
+        user = authenticate_user(username, password)
+        return jsonify({"access_token": create_token(user), "role": user["role"],
+                        "username": user["username"], "user_id": user["user_id"]})
+    except Exception as e:
+        if "UNIQUE" in str(e):
+            return jsonify({"error": "Username or email already exists"}), 409
+        return jsonify({"error": str(e)}), 500
+
+@api.route("/auth/setup-2fa", methods=["POST"])
+@token_required
+def setup_2fa():
+    """Generate a TOTP secret for the user."""
+    from app.db import get_db, generate_totp_secret
+    secret = generate_totp_secret()
+    conn = get_db()
+    conn.execute("UPDATE users SET totp_secret=? WHERE user_id=?",
+                 (secret, request.user.get("user_id")))
+    conn.commit()
+    conn.close()
+    return jsonify({"secret": secret,
+                    "otpauth_uri": f"otpauth://totp/AfriSK:{request.user.get('sub')}?secret={secret}&issuer=AfriSK"})
+
+@api.route("/auth/enable-2fa", methods=["POST"])
+@token_required
+def enable_2fa():
+    """Verify a TOTP code and enable 2FA."""
+    data = request.get_json()
+    code = data.get("code", "")
+    from app.db import get_db, verify_totp
+    conn = get_db()
+    user = conn.execute("SELECT totp_secret FROM users WHERE user_id=?",
+                        (request.user.get("user_id"),)).fetchone()
+    if not user or not user["totp_secret"]:
+        conn.close()
+        return jsonify({"error": "Run setup-2fa first"}), 400
+    if not verify_totp(user["totp_secret"], code):
+        conn.close()
+        return jsonify({"error": "Invalid code"}), 400
+    conn.execute("UPDATE users SET totp_enabled=1 WHERE user_id=?",
+                 (request.user.get("user_id"),))
+    conn.commit()
+    conn.close()
+    return jsonify({"enabled": True})
 
 @api.route("/auth/me")
 @token_required
@@ -947,10 +1013,12 @@ def portfolio_analytics(pid):
     # ── Asset Allocation ─────────────────────────────────────
     allocation = []
     for i, sym in enumerate(price_df.columns):
+        h_info = matched_holdings.get(sym, {})
         allocation.append({
             "symbol": sym,
             "weight": round(float(w_arr[i]) * 100, 2),
-            "market_value": round(float(matched_holdings.get(sym, {}).get("market_value", 0)), 0),
+            "market_value": round(float(h_info.get("market_value", 0)), 0),
+            "sector": h_info.get("sector", ""),
         })
 
     # ── Summary Stats ────────────────────────────────────────

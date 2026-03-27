@@ -335,6 +335,8 @@ def compute_layer0(prices, holdings):
             "mean_cvar": round(pf_cvar_cur, 3),
             "har_forecast": round(pf_har["fc_ann"], 2),
             "worst_dd": round(float(dd_port.min()), 2),
+            "skewness": round(float(sp_skew(port_ret.dropna().values)), 4) if len(port_ret.dropna()) > 10 else 0,
+            "kurtosis": round(float(sp_kurt(port_ret.dropna().values)), 4) if len(port_ret.dropna()) > 10 else 0,
             "n_markets": len(markets_use),
             "n_holdings": len(holdings),
         },

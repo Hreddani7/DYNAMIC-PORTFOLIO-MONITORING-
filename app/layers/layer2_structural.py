@@ -164,23 +164,35 @@ def compute_layer2(prices, holdings):
         # Mining/Resources → Commodity Risk
         "GFI": "Commodity", "AGL": "Commodity", "SSW": "Commodity",
         "ANG": "Commodity", "IMP": "Commodity", "AMS": "Commodity",
+        "BHP": "Commodity", "RNI": "Commodity", "EXX": "Commodity",
         "GoldFields": "Commodity", "AngloAmerican": "Commodity", "Sibanye": "Commodity",
-        "ImpalaPlatinum": "Commodity",
+        "ImpalaPlatinum": "Commodity", "BHPGroup": "Commodity",
         # Energy → Commodity Risk
         "SOL": "Commodity", "Sasol": "Commodity",
         # Banks/Insurance → Domestic/Sovereign Risk
         "SBK": "Domestic", "FSR": "Domestic", "ABG": "Domestic", "NED": "Domestic",
         "CPI": "Domestic", "SLM": "Domestic", "DSY": "Domestic",
+        "REM": "Domestic", "INP": "Domestic", "INL": "Domestic",
         "StandardBank": "Domestic", "FirstRand": "Domestic", "Absa": "Domestic",
         "Sanlam": "Domestic",
         # Tech/Global → Global Risk
         "NPN": "Global", "PRX": "Global", "CFR": "Global",
         "Naspers": "Global", "Prosus": "Global", "Richemont": "Global",
         # Telecom → Domestic
-        "MTN": "Domestic", "MTN_SA": "Domestic", "Vodacom": "Domestic",
-        # Retail/Consumer → Behavioral/Domestic
-        "SHP": "Behavioral", "MRP": "Behavioral", "BTI": "Behavioral",
-        "Shoprite": "Behavioral", "BAT": "Behavioral",
+        "MTN": "Domestic", "MTN_SA": "Domestic", "VOD": "Domestic", "Vodacom": "Domestic",
+        # Retail/Consumer → Domestic
+        "SHP": "Domestic", "MRP": "Domestic", "BTI": "Domestic",
+        "TFG": "Domestic", "SPP": "Domestic", "WHL": "Domestic",
+        "Shoprite": "Domestic", "BAT": "Domestic",
+        # Property → Domestic
+        "GRT": "Domestic", "RDF": "Domestic",
+        # Diversified → Commodity
+        "APN": "Commodity", "MNP": "Commodity",
+        # Healthcare
+        "APN": "Domestic", "MEI": "Domestic",
+        # Industrial
+        "BID": "Domestic", "MNP": "Commodity",
+        "VKE": "Domestic", "EMI": "Domestic",
     }
     # Factor theme display names
     FACTOR_THEME_LABELS = {

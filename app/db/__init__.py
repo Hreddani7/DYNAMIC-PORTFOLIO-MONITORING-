@@ -1,5 +1,5 @@
-"""Database — SQLite with portfolio upload support."""
-import os, sqlite3, hashlib, uuid, json
+"""Database — SQLite with portfolio upload support and 2FA."""
+import os, sqlite3, hashlib, uuid, json, hmac, struct, time, base64
 from datetime import datetime
 from app.config import UPLOAD_DIR
 
@@ -12,13 +12,47 @@ def get_db():
     return conn
 
 
+# ═══ TOTP 2FA ═══════════════════════════════════════════════════════════
+def generate_totp_secret():
+    """Generate a random base32 TOTP secret."""
+    return base64.b32encode(os.urandom(20)).decode("utf-8").rstrip("=")
+
+
+def _hotp(secret_b32, counter):
+    """Compute HOTP value."""
+    key = base64.b32decode(secret_b32 + "=" * (-len(secret_b32) % 8), casefold=True)
+    msg = struct.pack(">Q", counter)
+    h = hmac.new(key, msg, "sha1").digest()
+    offset = h[-1] & 0x0F
+    code = struct.unpack(">I", h[offset:offset + 4])[0] & 0x7FFFFFFF
+    return str(code % 10**6).zfill(6)
+
+
+def verify_totp(secret_b32, token, window=1):
+    """Verify a TOTP token with ±window tolerance."""
+    if not secret_b32 or not token:
+        return False
+    counter = int(time.time()) // 30
+    for i in range(-window, window + 1):
+        if _hotp(secret_b32, counter + i) == str(token).zfill(6):
+            return True
+    return False
+
+
+def get_current_totp(secret_b32):
+    """Get current TOTP code (for testing/setup)."""
+    counter = int(time.time()) // 30
+    return _hotp(secret_b32, counter)
+
+
 def init_db():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     conn = get_db()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
-            user_id TEXT PRIMARY KEY, username TEXT UNIQUE, email TEXT,
-            password_hash TEXT, role TEXT DEFAULT 'retail_user', created_at TEXT);
+            user_id TEXT PRIMARY KEY, username TEXT UNIQUE, email TEXT UNIQUE,
+            password_hash TEXT, role TEXT DEFAULT 'user', created_at TEXT,
+            totp_secret TEXT, totp_enabled INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS portfolios (
             portfolio_id TEXT PRIMARY KEY, user_id TEXT, name TEXT, description TEXT,
             source TEXT DEFAULT 'manual', file_name TEXT, created_at TEXT, updated_at TEXT);
@@ -27,18 +61,36 @@ def init_db():
             weight REAL, quantity REAL, price REAL, market_value REAL,
             currency TEXT, as_of_date TEXT, PRIMARY KEY (portfolio_id, asset_id));
     """)
-    for uid, un, pw, role in [
-        ("admin-001", "admin", "admin123", "admin"),
-        ("inst-001", "institution", "inst123", "institutional_user"),
-        ("ret-001", "retail", "retail123", "retail_user"),
-    ]:
-        try:
-            conn.execute("INSERT INTO users VALUES (?,?,?,?,?,?)",
-                         (uid, un, f"{un}@afrisk.io", hashlib.sha256(pw.encode()).hexdigest(), role, datetime.now().isoformat()))
-        except sqlite3.IntegrityError:
-            pass
+    # Migrate: add totp columns if missing
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    # Seed default admin account
+    try:
+        conn.execute("INSERT INTO users (user_id, username, email, password_hash, role, created_at) VALUES (?,?,?,?,?,?)",
+                     ("admin-001", "admin", "admin@afrisk.io",
+                      hashlib.sha256("admin123".encode()).hexdigest(), "admin", datetime.now().isoformat()))
+    except sqlite3.IntegrityError:
+        pass
     conn.commit()
     conn.close()
+
+
+def create_user(username, email, password):
+    """Register a new user. Returns user_id or raises."""
+    conn = get_db()
+    uid = f"usr-{uuid.uuid4().hex[:8]}"
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    conn.execute("INSERT INTO users (user_id, username, email, password_hash, role, created_at) VALUES (?,?,?,?,?,?)",
+                 (uid, username, email, pw_hash, "user", datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return uid
 
 
 def create_portfolio(user_id, name, description="", source="manual", file_name=""):

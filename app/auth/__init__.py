@@ -1,5 +1,5 @@
 """
-Authentication & RBAC — JWT tokens, password hashing, Flask middleware.
+Authentication & RBAC — JWT tokens, password hashing, 2FA (TOTP), Flask middleware.
 """
 import hashlib
 from datetime import datetime, timedelta
@@ -9,7 +9,7 @@ import jwt as pyjwt
 from flask import request, jsonify
 
 from app.config import SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRY_HOURS
-from app.db import get_db
+from app.db import get_db, verify_totp
 
 
 def hash_password(password):
@@ -17,8 +17,11 @@ def hash_password(password):
 
 
 def authenticate_user(username, password):
+    """Authenticate by username OR email."""
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    user = conn.execute(
+        "SELECT * FROM users WHERE username=? OR email=?", (username, username)
+    ).fetchone()
     conn.close()
     if not user:
         return None

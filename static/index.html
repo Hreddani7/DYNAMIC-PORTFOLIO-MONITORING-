@@ -12,15 +12,20 @@
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}input,textarea,select,button{font-family:inherit}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes spin{to{transform:rotate(360deg)}}.fi{animation:fadeIn .3s ease both}
-.lw{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--b0);background-image:radial-gradient(ellipse at 30% 50%,rgba(212,151,58,.06) 0%,transparent 50%)}
-.lb{width:360px;padding:40px;background:var(--b2);border:1px solid var(--bd);border-radius:12px}
-.lb-logo{font-family:'Playfair Display',serif;font-size:28px;font-weight:800;color:var(--ac)}.lb-sub{color:var(--t3);font-size:11px;margin:4px 0 24px}
+.lw{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--b0);background-image:radial-gradient(ellipse at 50% 40%,rgba(212,151,58,.04) 0%,transparent 60%)}
+.lb{width:400px;padding:48px 40px;background:transparent;text-align:center}
+.lb-logo-icon{width:56px;height:56px;margin:0 auto 20px;background:var(--b2);border:1px solid var(--bd);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--ac)}
+.lb-logo{font-family:'DM Sans',sans-serif;font-size:24px;font-weight:600;color:var(--t1);letter-spacing:-.3px}.lb-sub{color:var(--t3);font-size:13px;margin:6px 0 32px}
 .fg{margin-bottom:14px}.fl{display:block;font-size:9px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
-.fin{width:100%;padding:9px 11px;background:var(--b0);border:1px solid var(--bd);border-radius:6px;color:var(--t1);font-size:12px;outline:none}.fin:focus{border-color:var(--ac)}
-.btn{width:100%;padding:10px;background:var(--ac);color:var(--b0);border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}.btn:hover{background:var(--ac2)}.btn:disabled{opacity:.5}
-.lerr{color:var(--rd);font-size:10px;margin-top:4px;min-height:14px}.lhint{margin-top:14px;font-size:9px;color:var(--t3);text-align:center;line-height:1.5}
-.app{display:flex;height:100vh}.sb{width:220px;background:var(--b1);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0}
-.sb-hd{padding:14px 14px 10px;border-bottom:1px solid var(--bd)}.sb-logo{font-family:'Playfair Display',serif;font-size:18px;font-weight:800;color:var(--ac)}
+.fin{width:100%;padding:12px 14px;background:var(--b2);border:1px solid var(--bd);border-radius:8px;color:var(--t1);font-size:13px;outline:none;transition:border-color .15s}.fin:focus{border-color:var(--t3)}
+.btn{width:100%;padding:12px;background:var(--t1);color:var(--b0);border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s}.btn:hover{opacity:.9}.btn:disabled{opacity:.4}
+.btn-ghost{background:transparent;border:1px solid var(--bd);color:var(--t2)}.btn-ghost:hover{border-color:var(--t3);color:var(--t1)}
+.lerr{color:var(--rd);font-size:11px;margin-top:6px;min-height:16px;text-align:center}.lhint{margin-top:20px;font-size:12px;color:var(--t3);text-align:center;line-height:1.5}
+.ldiv{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--t3);font-size:11px}.ldiv::before,.ldiv::after{content:'';flex:1;border-top:1px solid var(--bd)}
+.app{display:flex;height:100vh}.sb{width:220px;background:var(--b1);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;transition:margin-left .2s ease;margin-left:0}
+.sb.collapsed{margin-left:-220px}
+.sb-hd{padding:14px 14px 10px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}.sb-logo{font-family:'Playfair Display',serif;font-size:18px;font-weight:800;color:var(--ac)}
+.sb-toggle{background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:4px}.sb-toggle:hover{color:var(--t1);background:var(--b2)}
 .sb-tag{font-size:7px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px}.sb-nav{flex:1;padding:8px 6px;overflow-y:auto}
 .ns{font-size:7px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:1px;padding:12px 8px 3px}
 .ni{display:flex;align-items:center;gap:7px;padding:7px 9px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--t2);transition:all .12s;margin-bottom:1px}
@@ -67,8 +72,7 @@
 .cp-i{padding:8px 10px;border-top:1px solid var(--bd);display:flex;gap:5px}
 .ci{flex:1;padding:7px 9px;background:var(--b0);border:1px solid var(--bd);border-radius:5px;color:var(--t1);font-size:10.5px;outline:none;resize:none}
 .cs{padding:7px 10px;background:var(--ac);color:var(--b0);border:none;border-radius:5px;font-weight:600;cursor:pointer;font-size:10px}
-.cfab{position:fixed;bottom:16px;right:16px;width:40px;height:40px;border-radius:50%;background:var(--ac);border:none;cursor:pointer;font-size:16px;color:var(--b0);box-shadow:0 3px 10px rgba(212,151,58,.25);z-index:90}
-.cfab:hover{transform:scale(1.05)}.cfab.hid{display:none}
+.cfab{display:none}
 </style>
 </head>
 <body>
@@ -97,8 +101,55 @@ function mkHBar(id,labels,data,colors){const cv=document.getElementById(id);if(!
 function drawGauge(id,score,level,color){const cv=document.getElementById(id);if(!cv)return;const ctx=cv.getContext('2d');const w=cv.width=cv.parentElement.offsetWidth||300;const h=cv.height=Math.min(w*0.55,180);const cx=w/2,cy=h-15,r=Math.min(cx-20,cy-10);const zones=[{e:15,c:'#1E6B2E'},{e:30,c:'#4CAF50'},{e:45,c:'#C9A227'},{e:60,c:'#E67E22'},{e:75,c:'#E74C3C'},{e:90,c:'#C0392B'},{e:100,c:'#8B0000'}];ctx.clearRect(0,0,w,h);let prev=0;zones.forEach(z=>{const a1=Math.PI+Math.PI*(prev/100);const a2=Math.PI+Math.PI*(z.e/100);ctx.beginPath();ctx.arc(cx,cy,r,a1,a2);ctx.lineWidth=r*0.28;ctx.strokeStyle=z.c;ctx.stroke();prev=z.e;});const angle=Math.PI+Math.PI*(Math.min(Math.max(score,0),100)/100);const nl=r*0.75;ctx.save();ctx.translate(cx,cy);ctx.rotate(angle);ctx.beginPath();ctx.moveTo(0,-4);ctx.lineTo(nl,0);ctx.lineTo(0,4);ctx.closePath();ctx.fillStyle='#e8ecf4';ctx.fill();ctx.restore();ctx.beginPath();ctx.arc(cx,cy,8,0,2*Math.PI);ctx.fillStyle='#1a2436';ctx.fill();ctx.strokeStyle='#586880';ctx.lineWidth=2;ctx.stroke();ctx.font='bold 18px DM Sans';ctx.fillStyle=color||'#e8ecf4';ctx.textAlign='center';ctx.fillText(score.toFixed(1),cx,cy-r*0.35);ctx.font='10px DM Sans';ctx.fillStyle='#8d9db8';ctx.fillText(level||'',cx,cy-r*0.35+16);}
 
 // LOGIN
-function showLogin(){$('#root').innerHTML='';$('#root').appendChild(el('div',{cl:'lw'},el('div',{cl:'lb'},el('div',{cl:'lb-logo'},'AfriSK'),el('div',{cl:'lb-sub'},'African Structural Risk Intelligence — InteliRisk Engine'),el('div',{cl:'fg'},el('label',{cl:'fl'},'Username'),el('input',{cl:'fin',id:'lu',type:'text',value:'admin'})),el('div',{cl:'fg'},el('label',{cl:'fl'},'Password'),el('input',{cl:'fin',id:'lp',type:'password',value:'admin123'})),el('div',{id:'le',cl:'lerr'}),el('button',{cl:'btn',id:'lbtn',onClick:doLogin},'Sign In'),el('div',{cl:'lhint'},'admin/admin123 · institution/inst123 · retail/retail123'))));document.querySelectorAll('.fin').forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()}));}
-async function doLogin(){const b=$('#lbtn');b.disabled=true;b.textContent='Authenticating...';try{const d=await api('/api/v1/auth/login',{method:'POST',body:JSON.stringify({username:$('#lu').value,password:$('#lp').value})});TK=d.access_token;US={username:d.username,role:d.role};await initApp();}catch(e){$('#le').textContent='Invalid credentials';b.disabled=false;b.textContent='Sign In';}}
+let _loginMode='signin'; // 'signin', 'signup', '2fa'
+let _2faUser=null;
+function showLogin(){
+$('#root').innerHTML='';_loginMode='signin';_2faUser=null;
+const renderLogin=()=>{
+$('#root').innerHTML='';
+if(_loginMode==='signin'){
+$('#root').appendChild(el('div',{cl:'lw'},el('div',{cl:'lb'},
+el('div',{cl:'lb-logo-icon'},'◎'),
+el('div',{cl:'lb-logo'},'Welcome back'),
+el('div',{cl:'lb-sub'},'Sign in to your account'),
+el('div',{cl:'fg'},el('input',{cl:'fin',id:'lu',type:'text',placeholder:'Email or username'})),
+el('div',{cl:'fg'},el('input',{cl:'fin',id:'lp',type:'password',placeholder:'Password'})),
+el('div',{id:'le',cl:'lerr'}),
+el('button',{cl:'btn',id:'lbtn',onClick:doLogin},'Sign in'),
+el('div',{cl:'ldiv'},'or'),
+el('button',{cl:'btn btn-ghost',onClick:()=>{_loginMode='signup';renderLogin();}},'Create account'),
+el('div',{cl:'lhint'},'Demo: admin / admin123')
+)));
+}else if(_loginMode==='signup'){
+$('#root').appendChild(el('div',{cl:'lw'},el('div',{cl:'lb'},
+el('div',{cl:'lb-logo-icon'},'◎'),
+el('div',{cl:'lb-logo'},'Create account'),
+el('div',{cl:'lb-sub'},'Get started with AfriSK'),
+el('div',{cl:'fg'},el('input',{cl:'fin',id:'ru',type:'text',placeholder:'Username'})),
+el('div',{cl:'fg'},el('input',{cl:'fin',id:'re',type:'email',placeholder:'Email'})),
+el('div',{cl:'fg'},el('input',{cl:'fin',id:'rp',type:'password',placeholder:'Password (min 6 characters)'})),
+el('div',{id:'le',cl:'lerr'}),
+el('button',{cl:'btn',id:'rbtn',onClick:doRegister},'Create account'),
+el('div',{cl:'ldiv'},'or'),
+el('button',{cl:'btn btn-ghost',onClick:()=>{_loginMode='signin';renderLogin();}},'Sign in to existing account')
+)));
+}else if(_loginMode==='2fa'){
+$('#root').appendChild(el('div',{cl:'lw'},el('div',{cl:'lb'},
+el('div',{cl:'lb-logo-icon'},'🔒'),
+el('div',{cl:'lb-logo'},'Two-Factor Authentication'),
+el('div',{cl:'lb-sub'},'Enter the 6-digit code from your authenticator app'),
+el('div',{cl:'fg'},el('input',{cl:'fin',id:'tc',type:'text',placeholder:'000000',maxLength:'6',st:{textAlign:'center',fontSize:'20px',letterSpacing:'8px',fontFamily:'JetBrains Mono'}})),
+el('div',{id:'le',cl:'lerr'}),
+el('button',{cl:'btn',id:'tbtn',onClick:do2FA},'Verify'),
+el('div',{cl:'ldiv'},'or'),
+el('button',{cl:'btn btn-ghost',onClick:()=>{_loginMode='signin';_2faUser=null;renderLogin();}},'Back to sign in')
+)));
+}
+document.querySelectorAll('.fin').forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter'){if(_loginMode==='signin')doLogin();else if(_loginMode==='signup')doRegister();else if(_loginMode==='2fa')do2FA();}}));
+};renderLogin();}
+async function doLogin(){const b=$('#lbtn');if(!b)return;b.disabled=true;b.textContent='Signing in...';try{const r=await fetch('/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('#lu').value,password:$('#lp').value})});const d=await r.json();if(d.requires_2fa){_2faUser={username:$('#lu').value,password:$('#lp').value};_loginMode='2fa';showLogin();return;}if(d.error){$('#le').textContent=d.error;b.disabled=false;b.textContent='Sign in';return;}TK=d.access_token;US={username:d.username,role:d.role};await initApp();}catch(e){$('#le').textContent='Connection error';b.disabled=false;b.textContent='Sign in';}}
+async function doRegister(){const b=$('#rbtn');if(!b)return;b.disabled=true;b.textContent='Creating...';try{const r=await fetch('/api/v1/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('#ru').value,email:$('#re').value,password:$('#rp').value})});const d=await r.json();if(d.error){$('#le').textContent=d.error;b.disabled=false;b.textContent='Create account';return;}TK=d.access_token;US={username:d.username,role:d.role};await initApp();}catch(e){$('#le').textContent='Connection error';b.disabled=false;b.textContent='Create account';}}
+async function do2FA(){const b=$('#tbtn');if(!b)return;b.disabled=true;b.textContent='Verifying...';try{const r=await fetch('/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:_2faUser.username,password:_2faUser.password,totp_code:$('#tc').value})});const d=await r.json();if(d.error){$('#le').textContent=d.error;b.disabled=false;b.textContent='Verify';return;}TK=d.access_token;US={username:d.username,role:d.role};_2faUser=null;await initApp();}catch(e){$('#le').textContent='Connection error';b.disabled=false;b.textContent='Verify';}}
 async function initApp(){VW='upload';buildLayout();renderView();}
 function showLoading(){const c=$('#ct');if(c)c.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px">Computing 8 layers (InteliRisk)...</div></div>';}
 async function recompute(){showLoading();try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();renderView();}catch(e){console.error(e);}}
@@ -106,9 +157,11 @@ async function recompute(){showLoading();try{DT=await api('/api/v1/portfolios/'+
 const TITLES={overview:'Dashboard Overview',risk:'Portfolio Risk Core',structural:'Structural & Network',factors:'African Factor Model',regime:'HMM Regime Detection',stress:'Stress Simulator',intel:'Intelligence Report',analytics:'Portfolio Analytics',holdings:'Portfolio Holdings',upload:'Upload Portfolio',trades:'Bloomberg & Live Data'};
 const NAVS=[{id:'overview',i:'◈',l:'Overview',s:'DASHBOARD'},{id:'analytics',i:'▣',l:'Analytics',s:'DASHBOARD'},{id:'risk',i:'△',l:'Risk Core',s:'ANALYTICS'},{id:'structural',i:'◎',l:'Structural',s:'ANALYTICS'},{id:'factors',i:'⊞',l:'Factors',s:'ANALYTICS'},{id:'regime',i:'◆',l:'Regime',s:'ANALYTICS'},{id:'stress',i:'⚡',l:'Stress Test',s:'ANALYTICS'},{id:'intel',i:'★',l:'Intelligence',s:'INSIGHTS'},{id:'holdings',i:'☰',l:'Holdings',s:'PORTFOLIO'},{id:'upload',i:'⊕',l:'Upload',s:'PORTFOLIO'},{id:'trades',i:'⇄',l:'Bloomberg',s:'DATA'}];
 
+let _sbCollapsed=false;
 function buildLayout(){const r=$('#root');r.innerHTML='';let cs='';const ne=[];NAVS.forEach(n=>{if(n.s!==cs){ne.push(el('div',{cl:'ns'},n.s));cs=n.s;}ne.push(el('div',{cl:'ni'+(n.id===VW?' on':''),onClick:()=>{VW=n.id;buildLayout();renderView();}},el('span',{cl:'ni-i'},n.i),el('span',null,n.l),n.id==='intel'&&DT.intelligence?el('span',{cl:'ni-b'},''+(DT.intelligence.alerts||[]).length):null));});
-r.appendChild(el('div',{cl:'app'},el('div',{cl:'sb'},el('div',{cl:'sb-hd'},el('div',{cl:'sb-logo'},'AfriSK'),el('div',{cl:'sb-tag'},'Risk Intelligence Engine')),el('div',{cl:'sb-nav'},ne),el('div',{cl:'sb-ft'},el('div',{cl:'sb-u'},el('div',{cl:'sb-av'},(US||{}).username?US.username[0].toUpperCase():'?'),el('div',null,el('div',{cl:'sb-un'},(US||{}).username||''),el('div',{cl:'sb-ur'},((US||{}).role||'').replace(/_/g,' ')))))),el('div',{cl:'ma'},el('div',{cl:'tb'},el('div',{cl:'tb-t',id:'pt'},TITLES[VW]||''),el('div',{cl:'tb-r'},el('span',{cl:'tb-dot'}),el('span',{cl:'tb-st'},'Bloomberg'),el('button',{cl:'tbtn',onClick:recompute},'⟳ Refresh'),el('button',{cl:'tbtn tbtn-a',onClick:toggleChat},'◉ AI Assistant'))),el('div',{cl:'ct',id:'ct'})),el('div',{cl:'cp'+(CO?' open':''),id:'cpan'},el('div',{cl:'cp-h'},el('span',{cl:'cp-tt'},'AI Assistant'),el('button',{cl:'cp-x',onClick:toggleChat},'✕')),el('div',{cl:'cp-m',id:'cms'}),el('div',{cl:'cp-i'},el('textarea',{cl:'ci',id:'cin',placeholder:'Ask anything...',rows:'1',onKeydown:e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}}},),el('button',{cl:'cs',onClick:sendChat},'→'))),el('button',{cl:'cfab'+(CO?' hid':''),onClick:toggleChat},'◉')));refreshChatUI();}
-function toggleChat(){CO=!CO;const p=$('#cpan');if(p)p.classList.toggle('open',CO);const f=$('.cfab');if(f)f.classList.toggle('hid',CO);}
+r.appendChild(el('div',{cl:'app'},el('div',{cl:'sb'+(_sbCollapsed?' collapsed':''),id:'sidebar'},el('div',{cl:'sb-hd'},el('div',null,el('div',{cl:'sb-logo'},'AfriSK'),el('div',{cl:'sb-tag'},'Risk Intelligence Engine')),el('button',{cl:'sb-toggle',onClick:toggleSidebar},'✕')),el('div',{cl:'sb-nav'},ne),el('div',{cl:'sb-ft'},el('div',{cl:'sb-u'},el('div',{cl:'sb-av'},(US||{}).username?US.username[0].toUpperCase():'?'),el('div',null,el('div',{cl:'sb-un'},(US||{}).username||''),el('div',{cl:'sb-ur'},((US||{}).role||'').replace(/_/g,' ')))))),el('div',{cl:'ma'},el('div',{cl:'tb'},el('button',{cl:'sb-toggle',onClick:toggleSidebar,st:{marginRight:'6px'}},'☰'),el('div',{cl:'tb-t',id:'pt'},TITLES[VW]||''),el('div',{cl:'tb-r'},el('span',{cl:'tb-dot'}),el('span',{cl:'tb-st'},'Bloomberg'),el('button',{cl:'tbtn',onClick:recompute},'⟳ Refresh'),el('button',{cl:'tbtn tbtn-a',onClick:toggleChat},'AI Assistant'))),el('div',{cl:'ct',id:'ct'})),el('div',{cl:'cp'+(CO?' open':''),id:'cpan'},el('div',{cl:'cp-h'},el('span',{cl:'cp-tt'},'AI Assistant'),el('button',{cl:'cp-x',onClick:toggleChat},'✕')),el('div',{cl:'cp-m',id:'cms'}),el('div',{cl:'cp-i'},el('textarea',{cl:'ci',id:'cin',placeholder:'Ask anything...',rows:'1',onKeydown:e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}}},),el('button',{cl:'cs',onClick:sendChat},'→')))));refreshChatUI();}
+function toggleSidebar(){_sbCollapsed=!_sbCollapsed;const sb=$('#sidebar');if(sb)sb.classList.toggle('collapsed',_sbCollapsed);}
+function toggleChat(){CO=!CO;const p=$('#cpan');if(p)p.classList.toggle('open',CO);}
 async function sendChat(){const inp=$('#cin');if(!inp)return;const msg=inp.value.trim();if(!msg)return;CH.push({r:'user',t:msg});inp.value='';refreshChatUI();try{const res=await api('/api/v1/chat',{method:'POST',body:JSON.stringify({message:msg,portfolio_id:PID})});CH.push({r:'assistant',t:res.response});}catch(e){CH.push({r:'assistant',t:'Error: '+e.message});}refreshChatUI();}
 function refreshChatUI(){const c=$('#cms');if(!c)return;c.innerHTML='';CH.forEach(m=>{const d=document.createElement('div');d.className='cm '+(m.r==='user'?'cm-u':'cm-a');d.textContent=m.t;c.appendChild(d);});c.scrollTop=c.scrollHeight;}
 
@@ -302,10 +355,10 @@ const cv=document.getElementById('ag1');
 if(cv){CTS['ag1']=new Chart(cv,{type:'line',data:{labels:gr.dates.map(d=>d.slice(2)),datasets:ds.map(d=>({label:d.l,data:d.d,borderColor:d.c,backgroundColor:'transparent',borderWidth:d.l==='Portfolio'?2.5:1,pointRadius:0,tension:.3}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:8},boxWidth:8}},tooltip:{mode:'index',intersect:false,backgroundColor:'#1e2a3c',titleColor:'#e8ecf4',bodyColor:'#8d9db8',titleFont:{size:9},bodyFont:{size:9},callbacks:{label:ctx=>ctx.dataset.label+': '+(+ctx.raw).toFixed(1)+'%'}}},scales:{x:{grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7},maxTicksLimit:10},border:{display:false}},y:{title:{display:true,text:'Cumulative Return (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}
 }
 
-// Asset Allocation Pie
+// Asset Allocation Pie — with sector + weight on hover
 const alloc=data.allocation||[];
 if(alloc.length){
-mkDoughnut('ag2',alloc.map(a=>a.symbol),alloc.map(a=>a.weight),alloc.map((_,i)=>SCOLORS[i%SCOLORS.length]));
+const cv2=document.getElementById('ag2');if(cv2){CTS['ag2']=new Chart(cv2,{type:'doughnut',data:{labels:alloc.map(a=>a.symbol),datasets:[{data:alloc.map(a=>a.weight),backgroundColor:alloc.map((_,i)=>SCOLORS[i%SCOLORS.length]),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{color:'#8d9db8',font:{size:8},boxWidth:7,padding:5}},tooltip:{callbacks:{title:function(ctx){const i=ctx[0].dataIndex;const a=alloc[i];return a.symbol+(a.sector?' — '+a.sector:'');},label:function(ctx){const i=ctx.dataIndex;const a=alloc[i];const w=a.weight.toFixed(1);return ['Weight: '+w+'%',a.sector?'Sector: '+a.sector:'',a.market_value?'Value: '+Math.round(a.market_value).toLocaleString():''].filter(Boolean);}}}}}})}
 }
 
 // Annual Returns Bar Chart
@@ -460,8 +513,8 @@ ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t
 el('span',{st:{fontSize:'8px',color:'var(--t3)'}},'Clustering: '+(nt.clustering||0).toFixed(2))),
 el('div',{cl:'nv',id:'netv',st:{height:'400px'}})));
 
-// Factor Boxplot (from Layer 3 factors)
-ct.appendChild(el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Distribution (Boxplot)')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s4'}))));
+// Factor Boxplot (from Layer 3 factors) — shows distribution of each macro factor z-score
+ct.appendChild(el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Macro Factor Distribution'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'Z-score range (IQR) and median of each L3 risk factor over full history')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s4'}))));
 
 setTimeout(()=>{
 // PC Concentration chart — show each PC individually with its % impact
@@ -513,9 +566,9 @@ if(fts.length&&fnames.length){
 const boxData=fnames.map(fn=>{const vals=fts.map(r=>r[fn]||0).filter(v=>!isNaN(v));vals.sort((a,b)=>a-b);const q1=vals[Math.floor(vals.length*0.25)]||0;const med=vals[Math.floor(vals.length*0.5)]||0;const q3=vals[Math.floor(vals.length*0.75)]||0;return{label:((DT.factors||{}).factor_meta||{})[fn]?.label||fn,q1,med,q3};});
 const cv4=document.getElementById('s4');if(cv4){
 CTS['s4']=new Chart(cv4,{type:'bar',data:{labels:boxData.map(b=>b.label),datasets:[
-{label:'IQR',data:boxData.map(b=>b.q3-b.q1),backgroundColor:'rgba(152,120,232,.3)',borderColor:'#9878e8',borderWidth:1,borderRadius:2},
-{label:'Median',data:boxData.map(b=>b.med),type:'line',borderColor:'#d4973a',backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointBackgroundColor:'#d4973a'}
-]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:8},boxWidth:8}}},scales:{x:{grid:{display:false},ticks:{color:'#586880',font:{size:7}},border:{display:false}},y:{grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});
+{label:'IQR (25th-75th %ile)',data:boxData.map(b=>b.q3-b.q1),backgroundColor:boxData.map(b=>Math.abs(b.med)>0.5?'rgba(240,96,96,.35)':'rgba(152,120,232,.3)'),borderColor:boxData.map(b=>Math.abs(b.med)>0.5?'#f06060':'#9878e8'),borderWidth:1,borderRadius:2},
+{label:'Median Z-Score',data:boxData.map(b=>b.med),type:'line',borderColor:'#d4973a',backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointBackgroundColor:'#d4973a'}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:8},boxWidth:8}},tooltip:{callbacks:{afterBody:function(ctx){const i=ctx[0].dataIndex;const b=boxData[i];return ['Q1: '+b.q1.toFixed(2)+' | Median: '+b.med.toFixed(2)+' | Q3: '+b.q3.toFixed(2),Math.abs(b.med)>1?'⚠ Extreme — significant market stress':'|med|<0.5 = Normal range'];}}}},scales:{x:{grid:{display:false},ticks:{color:'#586880',font:{size:7}},border:{display:false}},y:{title:{display:true,text:'Z-Score',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});
 }}
 
 // D3 Contagion Network
@@ -554,15 +607,15 @@ const trendCol=fs.trend==='increasing'?'var(--rd)':fs.trend==='decreasing'?'var(
 const riskPct=(cv[n]||{}).risk_pct||0;
 return el('div',{st:{background:'var(--b0)',borderRadius:'6px',padding:'10px',border:'1px solid var(--bd)'}},
 el('div',{cl:'fb',st:{marginBottom:'4px'}},el('span',{st:{fontSize:'8px',color:meta.color||'var(--t3)',textTransform:'uppercase',letterSpacing:'.4px',fontWeight:'600'}},meta.label||n),el('span',{st:{fontSize:'9px',color:stCol,fontWeight:'600'}},fs.strength)),
-el('div',{st:{fontFamily:'JetBrains Mono',fontSize:'18px',fontWeight:'700',color:stCol,marginBottom:'3px'}},(fs.z_score||0).toFixed(2)),
-bar(Math.abs(fs.z_score||0)*33,100,stCol),
+el('div',{st:{fontFamily:'JetBrains Mono',fontSize:'18px',fontWeight:'700',color:stCol,marginBottom:'3px'}},(fs.z_current||fs.z_score||0).toFixed(2)),
+bar(Math.abs(fs.z_current||fs.z_score||0)*33,100,stCol),
 el('div',{cl:'fb',st:{marginTop:'4px',fontSize:'8px'}},el('span',{st:{color:trendCol}},trendIcon+' '+fs.trend),el('span',{st:{color:'var(--t3)'}},'Risk: '+riskPct.toFixed(1)+'%'))
 );}))));
 
-// Factor Risk Contribution — horizontal bar chart (most important colored differently)
+// Factor Risk Contribution — horizontal bar chart with explanation
 ct.appendChild(el('div',{cl:'g2 mb'},
-el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Risk Contribution (%)')),el('div',{cl:'cc',st:{height:'220px'}},el('canvas',{id:'frc1'}))),
-el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Z-Scores (Current)')),el('div',{cl:'cc',st:{height:'220px'}},el('canvas',{id:'fzs1'})))
+el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Risk Contribution'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'% of total portfolio risk explained by each factor')),el('div',{cl:'cc',st:{height:'220px'}},el('canvas',{id:'frc1'}))),
+el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Z-Scores (Current)'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'Standard deviations from mean \u2014 |z|>2 = extreme')),el('div',{cl:'cc',st:{height:'220px'}},el('canvas',{id:'fzs1'})))
 ));
 
 // Per-factor individual evolution charts (one chart per factor)
@@ -600,7 +653,7 @@ setTimeout(()=>{
 // Factor Risk Contribution horizontal bar
 if(frs.length){const maxPct=frs[0]?.pct||1;mkHBar('frc1',frs.map(r=>r.label),frs.map(r=>r.pct),frs.map((r,i)=>i===0?r.color+'':'rgba(152,120,232,.45)'));}
 // Factor Z-Scores bar chart
-const fzNames=fnames.map(fn=>(f.factor_meta||{})[fn]?.label||fn);const fzVals=fnames.map(fn=>zs[fn]||0);const fzCols=fnames.map(fn=>(f.factor_meta||{})[fn]?.color||'#5896f0');
+const fzNames=fnames.map(fn=>(f.factor_meta||{})[fn]?.label||fn);const fzVals=fnames.map(fn=>zs[fn]||(fstr[fn]||{}).z_current||0);const fzCols=fnames.map(fn=>(f.factor_meta||{})[fn]?.color||'#5896f0');
 if(fzVals.length)mkBar('fzs1',fzNames,fzVals,fzCols);
 // Per-factor individual charts
 const fcl=['#1F4E79','#2E75B6','#E67E22','#C0392B','#8E44AD','#C9A227'];
