@@ -478,6 +478,63 @@ def compute_layer3(prices, holdings, l2_internal=None):
             "risk_pct": factor_risk_contrib[f]["pct"],
         }
 
+    # ── Factor PCA — decompose which macro factors drive the most variance ──
+    from sklearn.decomposition import PCA as _PCA
+    factor_pca_result = {}
+    try:
+        fpca_data = fact_sc[FACTOR_COLS].dropna(how="any")
+        if len(fpca_data) >= 30:
+            n_fc = len(FACTOR_COLS)
+            fpca = _PCA(n_components=n_fc)
+            fpca.fit(fpca_data.values)
+            f_eigenvalues = fpca.explained_variance_
+            f_expl = fpca.explained_variance_ratio_
+            f_comps = fpca.components_
+            # Label each PC by the factor with highest absolute loading
+            f_scree = []
+            f_pc_labels = []
+            cumvar = 0.0
+            for j in range(n_fc):
+                abs_loads = np.abs(f_comps[j])
+                top_idx = int(np.argmax(abs_loads))
+                driver = FACTOR_COLS[top_idx]
+                driver_label = FACTOR_META[driver]["label"]
+                driver_loading = float(f_comps[j, top_idx])
+                cumvar += float(f_expl[j]) * 100
+                pc_label = f"PC{j+1} ({driver_label})"
+                f_pc_labels.append(pc_label)
+                # Top 3 loadings
+                top3_idx = np.argsort(abs_loads)[::-1][:3]
+                top3 = [{"factor": FACTOR_META[FACTOR_COLS[k]]["label"],
+                         "loading": round(float(f_comps[j, k]), 3)}
+                        for k in top3_idx]
+                f_scree.append({
+                    "pc": pc_label,
+                    "eigenvalue": round(float(f_eigenvalues[j]), 4),
+                    "variance_pct": round(float(f_expl[j]) * 100, 1),
+                    "cumulative_pct": round(cumvar, 1),
+                    "driver": driver_label,
+                    "driver_loading": round(driver_loading, 3),
+                    "top_loadings": top3,
+                })
+            # Factor loadings matrix (factors x PCs)
+            f_loadings = []
+            for fi, fn in enumerate(FACTOR_COLS):
+                for j in range(n_fc):
+                    f_loadings.append({
+                        "factor": FACTOR_META[fn]["label"],
+                        "component": f_pc_labels[j],
+                        "value": round(float(f_comps[j, fi]), 3),
+                    })
+            factor_pca_result = {
+                "scree": f_scree,
+                "labels": f_pc_labels,
+                "loadings": f_loadings,
+                "n_factors": n_fc,
+            }
+    except Exception:
+        pass
+
     return {
         "markets_used": markets_use,
         "factor_names": FACTOR_COLS,
@@ -511,6 +568,7 @@ def compute_layer3(prices, holdings, l2_internal=None):
         },
         "factor_time_series": factor_ts,
         "per_factor_ts": per_factor_ts,
+        "factor_pca": factor_pca_result,
         "_internal": {
             "fact_sc": fact_sc,
             "fac_df": fac_df,

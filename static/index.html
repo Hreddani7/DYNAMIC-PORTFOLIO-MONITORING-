@@ -448,25 +448,28 @@ el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Individual PC 
 el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Avg Pairwise Correlation (Rolling 60d)')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s2'})))
 ));
 
-// Row 2: Eigenvalue Scree + Cumulative Variance
+// Row 2: Factor PCA — Eigenvalue Scree + Cumulative Variance (from L3 macro factors)
+const fpca=(DT.factors||{}).factor_pca||{};
+const fScree=fpca.scree||pc.scree||[];
 ct.appendChild(el('div',{cl:'g2 mb'},
-el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Eigenvalue Scree Plot')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s3'}))),
-el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Cumulative Variance Explained')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s3b'})))
+el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Eigenvalue Scree'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'PCA on 6 macro risk factors — which factor explains most variance')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s3'}))),
+el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Cumulative Variance Explained'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'How many factors needed to explain total risk')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s3b'})))
 ));
 
-// PCA Decomposition Table
-const scree=pc.scree||[];
+// Factor PCA Decomposition Table
+const scree=fScree;
 if(scree.length){
-ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'PCA Decomposition — Factor Breakdown')),
-el('table',{cl:'dt'},el('thead',null,el('tr',null,...['Factor','Eigenvalue','Variance %','Cumulative %','Top Loadings'].map(t=>el('th',null,t)))),
+ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor PCA Decomposition'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'Principal components of 6 macro risk factors (Global, USD, Commodity, Sovereign, Domestic, Herding)')),
+el('table',{cl:'dt'},el('thead',null,el('tr',null,...['PC','Driver','Eigenvalue','Variance %','Cumulative %','Top Factor Loadings'].map(t=>el('th',null,t)))),
 el('tbody',null,...scree.map((r,i)=>{
-const topL=(pc.top_loadings||{})[r.pc]||[];
+const topL=r.top_loadings||[];
 return el('tr',null,
-el('td',{st:{fontWeight:'600',color:i===0?'var(--pu)':'var(--t1)'}},r.pc),
+el('td',{st:{fontWeight:'600',color:i===0?'var(--ac)':i<3?'var(--pu)':'var(--t1)'}},r.pc),
+el('td',{st:{fontWeight:'600',color:'var(--ac)',fontSize:'10px'}},r.driver||''),
 el('td',{cl:'mn'},r.eigenvalue.toFixed(2)),
-el('td',{cl:'mn',st:{color:'var(--pu)'}},r.variance_pct.toFixed(1)+'%'),
+el('td',{cl:'mn',st:{color:r.variance_pct>20?'var(--ac)':'var(--pu)'}},r.variance_pct.toFixed(1)+'%'),
 el('td',{cl:'mn'},r.cumulative_pct.toFixed(1)+'%'),
-el('td',{st:{fontSize:'8px',color:'var(--t3)'}},topL.slice(0,3).map(l=>l.asset+'('+l.loading.toFixed(2)+')').join(', '))
+el('td',{st:{fontSize:'8px',color:'var(--t3)'}},topL.slice(0,3).map(l=>l.factor+'('+l.loading.toFixed(2)+')').join(', '))
 );})
 ))));
 }
@@ -477,20 +480,20 @@ if(pcts.dates&&pcts.dates.length){
 ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Principal Component Time Series')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s5'}))));
 }
 
-// Factor Loadings Heatmap
-const ldgs=pc.loadings||[];
-if(ldgs.length){
-const assets=[...new Set(ldgs.map(l=>l.market))];
-const comps=[...new Set(ldgs.map(l=>l.component))].slice(0,5);
-const ldgHeadRow=el('tr',null,el('th',null,'Asset'),...comps.map(c=>el('th',null,c)));
-const ldgBodyRows=assets.map(a=>{
-const pcCells=comps.map(c=>{const entry=ldgs.find(l=>l.market===a&&l.component===c);const v=entry?entry.value:0;
-const bg=v>0.3?'rgba(152,120,232,.15)':v<-0.3?'rgba(240,96,96,.12)':'';
-return el('td',{cl:'mn',st:{background:bg,color:Math.abs(v)>0.2?'var(--t1)':'var(--t3)',fontSize:'8px'}},v.toFixed(2));});
-return el('tr',null,el('td',{st:{fontWeight:'500',color:'var(--t1)',fontSize:'8px'}},a),...pcCells);});
-ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Loadings Heatmap (Assets x PCs)')),
+// Factor Loadings Heatmap — how each macro factor loads on each PC
+const fLdgs=fpca.loadings||pc.loadings||[];
+if(fLdgs.length){
+const fNames=[...new Set(fLdgs.map(l=>l.factor))];
+const fComps=[...new Set(fLdgs.map(l=>l.component))];
+const fLdgHead=el('tr',null,el('th',null,'Risk Factor'),...fComps.map(c=>el('th',{st:{fontSize:'7px'}},c)));
+const fLdgBody=fNames.map(fn=>{
+const cells=fComps.map(c=>{const entry=fLdgs.find(l=>l.factor===fn&&l.component===c);const v=entry?entry.value:0;
+const bg=Math.abs(v)>0.5?'rgba(212,151,58,.15)':Math.abs(v)>0.3?'rgba(152,120,232,.1)':'';
+return el('td',{cl:'mn',st:{background:bg,color:Math.abs(v)>0.3?'var(--ac)':Math.abs(v)>0.15?'var(--t1)':'var(--t3)',fontSize:'9px',fontWeight:Math.abs(v)>0.4?'600':'400'}},v.toFixed(3));});
+return el('tr',null,el('td',{st:{fontWeight:'600',color:'var(--t1)',fontSize:'9px'}},fn),...cells);});
+ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Loadings Heatmap'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'How each macro risk factor loads on each principal component')),
 el('div',{st:{overflowX:'auto'}},
-el('table',{cl:'dt'},el('thead',null,ldgHeadRow),el('tbody',null,...ldgBodyRows)))));
+el('table',{cl:'dt'},el('thead',null,fLdgHead),el('tbody',null,...fLdgBody)))));
 }
 
 // Correlation Heatmap
@@ -538,18 +541,18 @@ mkLine('s1',eh.map(h=>h.date.slice(5)),pcConcDS);
 const ch=co.history||[];
 if(ch.length)mkLine('s2',ch.map(h=>h.date.slice(5)),[{l:'Avg Corr',d:ch.map(h=>h.value),c:'#5896f0'}]);
 
-// Eigenvalue Scree bar chart
+// Factor Eigenvalue Scree bar chart (from L3 factor PCA)
 if(scree.length){
-// Dynamic scree — find largest eigenvalue gap to highlight most important PC
 const eigenVals=scree.map(s=>s.eigenvalue);let maxGapIdx=0;let maxGap=0;
 for(let gi=0;gi<eigenVals.length-1;gi++){const gap=eigenVals[gi]-eigenVals[gi+1];if(gap>maxGap){maxGap=gap;maxGapIdx=gi;}}
-mkBar('s3',scree.map(s=>s.pc),eigenVals,scree.map((_,i)=>i===maxGapIdx?'rgba(212,151,58,.85)':i<=maxGapIdx?'rgba(152,120,232,.6)':'rgba(152,120,232,.25)'));
-// Cumulative variance line
+const fColors=['#d4973a','#5896f0','#f06060','#2dd4a0','#9878e8','#20c8e0'];
+const cv3=document.getElementById('s3');if(cv3){CTS['s3']=new Chart(cv3,{type:'bar',data:{labels:scree.map(s=>s.driver||s.pc),datasets:[{data:eigenVals,backgroundColor:scree.map((_,i)=>fColors[i%fColors.length]),borderWidth:0,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:function(ctx){return scree[ctx[0].dataIndex].pc;},afterBody:function(ctx){const s=scree[ctx[0].dataIndex];return ['Variance: '+s.variance_pct.toFixed(1)+'%','Cumulative: '+s.cumulative_pct.toFixed(1)+'%','Driver: '+s.driver];}}}},scales:{x:{grid:{display:false},ticks:{color:'#8d9db8',font:{size:8,weight:'500'}},border:{display:false}},y:{title:{display:true,text:'Eigenvalue',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}
+// Cumulative variance
 const cv3b=document.getElementById('s3b');
-if(cv3b){CTS['s3b']=new Chart(cv3b,{type:'line',data:{labels:scree.map(s=>s.pc),datasets:[
-{label:'Cumulative %',data:scree.map(s=>s.cumulative_pct),borderColor:'#d4973a',backgroundColor:'rgba(212,151,58,.08)',borderWidth:2,pointRadius:3,pointBackgroundColor:'#d4973a',fill:true,tension:.3},
-{label:'Individual %',data:scree.map(s=>s.variance_pct),borderColor:'#9878e8',backgroundColor:'transparent',borderWidth:1.5,pointRadius:2,tension:.3}
-]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:8},boxWidth:8}}},scales:{x:{grid:{display:false},ticks:{color:'#586880',font:{size:7}},border:{display:false}},y:{title:{display:true,text:'Variance %',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}
+if(cv3b){CTS['s3b']=new Chart(cv3b,{type:'line',data:{labels:scree.map(s=>s.driver||s.pc),datasets:[
+{label:'Cumulative %',data:scree.map(s=>s.cumulative_pct),borderColor:'#d4973a',backgroundColor:'rgba(212,151,58,.08)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#d4973a',fill:true,tension:.3},
+{label:'Individual %',data:scree.map(s=>s.variance_pct),borderColor:'#9878e8',backgroundColor:'transparent',borderWidth:1.5,pointRadius:3,tension:.3}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:8},boxWidth:8}},tooltip:{callbacks:{afterBody:function(ctx){const s=scree[ctx[0].dataIndex];return s?['Factor: '+s.driver]:[]}}}},scales:{x:{grid:{display:false},ticks:{color:'#8d9db8',font:{size:8}},border:{display:false}},y:{title:{display:true,text:'Variance %',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});}
 }
 
 // PC Time Series
@@ -961,9 +964,9 @@ el('div',{st:{height:'180px'}},el('canvas',{id:'sim-pie'})),
 el('div',{st:{height:'180px'}},el('canvas',{id:'sim-pie2'})))));
 setTimeout(()=>{
 const tks=Object.keys(simPCR2);
-const cv1=document.getElementById('sim-pie');if(cv1)CTS['sim-pie']=new Chart(cv1,{type:'doughnut',data:{labels:tks,datasets:[{data:tks.map(t=>Math.abs(simPCR2[t]||0)),backgroundColor:tks.map((_,i)=>pieColors2[i%pieColors2.length]),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#8d9db8',font:{size:8},boxWidth:7}},title:{display:true,text:'Risk Contribution (%)',color:'#586880',font:{size:9}}}}});
+const cv1=document.getElementById('sim-pie');if(cv1)CTS['sim-pie']=new Chart(cv1,{type:'doughnut',data:{labels:tks,datasets:[{data:tks.map(t=>Math.abs(simPCR2[t]||0)),backgroundColor:tks.map((_,i)=>pieColors2[i%pieColors2.length]),borderWidth:1,borderColor:'rgba(0,0,0,.15)'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'right',labels:{color:'#8d9db8',font:{size:tks.length>8?6:8},boxWidth:7,padding:3}},title:{display:true,text:'Risk Contribution (%)',color:'#586880',font:{size:9}},tooltip:{backgroundColor:'#1e2a3c',titleColor:'#e8ecf4',bodyColor:'#8d9db8',callbacks:{label:function(ctx){return ctx.label+': '+ctx.parsed.toFixed(1)+'%';}}}}}});
 const blPCR2=sc.baseline_pcr||{};
-const cv2=document.getElementById('sim-pie2');if(cv2)CTS['sim-pie2']=new Chart(cv2,{type:'doughnut',data:{labels:tks,datasets:[{data:tks.map(t=>Math.abs(blPCR2[t]||simPCR2[t]||0)),backgroundColor:tks.map((_,i)=>pieColors2[i%pieColors2.length]+'88'),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#8d9db8',font:{size:8},boxWidth:7}},title:{display:true,text:'Baseline Allocation (%)',color:'#586880',font:{size:9}}}}});
+const cv2=document.getElementById('sim-pie2');if(cv2)CTS['sim-pie2']=new Chart(cv2,{type:'doughnut',data:{labels:tks,datasets:[{data:tks.map(t=>Math.abs(blPCR2[t]||simPCR2[t]||0)),backgroundColor:tks.map((_,i)=>pieColors2[i%pieColors2.length]+'88'),borderWidth:1,borderColor:'rgba(0,0,0,.1)'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'right',labels:{color:'#8d9db8',font:{size:tks.length>8?6:8},boxWidth:7,padding:3}},title:{display:true,text:'Baseline Allocation (%)',color:'#586880',font:{size:9}},tooltip:{backgroundColor:'#1e2a3c',titleColor:'#e8ecf4',bodyColor:'#8d9db8',callbacks:{label:function(ctx){return ctx.label+': '+ctx.parsed.toFixed(1)+'%';}}}}}});
 },80);
 }
 
@@ -1009,7 +1012,7 @@ if(pcrCv){
 const simPCR=isMC?(sc.paths[SIM.currentPath.toLowerCase()]||sc.paths.representative).pcr:sc.pcr;
 const blPCR=sc.baseline_pcr||{};
 const tickers=Object.keys(simPCR);
-CTS['sim-pcr']=new Chart(pcrCv,{type:'bar',data:{labels:tickers,datasets:[{label:'Simulated',data:tickers.map(t=>simPCR[t]||0),backgroundColor:'rgba(8,48,107,.7)',borderWidth:0,borderRadius:2},{label:'Baseline',data:tickers.map(t=>blPCR[t]||0),backgroundColor:'rgba(107,174,214,.5)',borderWidth:0,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:8},boxWidth:8}}},scales:{x:{title:{display:true,text:'Assets',color:'#586880',font:{size:8}},grid:{display:false},ticks:{color:'#586880',font:{size:7}},border:{display:false}},y:{title:{display:true,text:'PCR (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});
+CTS['sim-pcr']=new Chart(pcrCv,{type:'bar',data:{labels:tickers,datasets:[{label:'Simulated',data:tickers.map(t=>simPCR[t]||0),backgroundColor:'rgba(8,48,107,.7)',borderWidth:0,borderRadius:2},{label:'Baseline',data:tickers.map(t=>blPCR[t]||0),backgroundColor:'rgba(107,174,214,.5)',borderWidth:0,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#586880',font:{size:8},boxWidth:8}},tooltip:{backgroundColor:'#1e2a3c',titleColor:'#e8ecf4',bodyColor:'#8d9db8',callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toFixed(1)+'%';}}}},scales:{x:{title:{display:true,text:'Stocks',color:'#586880',font:{size:8}},grid:{display:false},ticks:{color:'#586880',font:{size:tickers.length>8?6:7},maxRotation:45},border:{display:false}},y:{title:{display:true,text:'PCR (%)',color:'#586880',font:{size:8}},grid:{color:'rgba(37,48,69,.2)'},ticks:{color:'#586880',font:{size:7}},border:{display:false}}}}});
 }
 },80);
 

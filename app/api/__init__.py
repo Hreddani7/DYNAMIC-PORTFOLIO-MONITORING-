@@ -1099,19 +1099,18 @@ def simulator_baseline(pid):
     weight_method = data.get("weight_method", "eq")
     custom_weights = data.get("custom_weights")
 
-    prices = generate_prices()
     holdings = get_holdings(pid)
     if not holdings:
         return jsonify({"error": "Portfolio not found or empty"}), 404
 
-    # Map holdings to price columns (deduplicate!)
-    markets = list(dict.fromkeys(
-        h["market"] for h in holdings if h["market"] in prices.columns
-    ))
-    if not markets:
-        markets = list(prices.columns)
+    # Build stock-level prices (NPN, SBK, AGL, etc.) — same as compute_all
+    pf_prices, holdings, _ = _build_portfolio_prices(holdings)
+    if pf_prices is not None and len(pf_prices.columns) >= 1:
+        prices_df = pf_prices
+    else:
+        prices_df = generate_prices()
 
-    prices_df = prices[markets].dropna(how="all")
+    markets = list(prices_df.columns)
 
     # Compute weights
     weights = compute_weights(prices_df, method=weight_method,
@@ -1124,6 +1123,7 @@ def simulator_baseline(pid):
     _sim_scenarios[pid]["_baseline"] = baseline
     _sim_scenarios[pid]["_weights"] = weights
     _sim_scenarios[pid]["_markets"] = markets
+    _sim_scenarios[pid]["_prices_df"] = prices_df  # Cache for MC/HR endpoints
 
     portfolio_value = sum(abs(h.get("market_value", 0)) for h in holdings) or 100000
 
@@ -1150,12 +1150,20 @@ def simulator_monte_carlo(pid):
     regime = data.get("regime", "Medium")
     stress_level = data.get("stress_level", "1.0x")
 
-    prices = generate_prices()
     stored = _sim_scenarios.get(pid, {})
-    markets = stored.get("_markets", list(prices.columns))
     weights = stored.get("_weights")
 
-    prices_df = prices[markets].dropna(how="all")
+    # Use cached stock-level prices from baseline, or build fresh
+    prices_df = stored.get("_prices_df")
+    if prices_df is None:
+        holdings = get_holdings(pid)
+        if holdings:
+            pf_prices, holdings, _ = _build_portfolio_prices(holdings)
+            prices_df = pf_prices if pf_prices is not None and len(pf_prices.columns) >= 1 else generate_prices()
+        else:
+            prices_df = generate_prices()
+
+    markets = list(prices_df.columns)
 
     if weights is None:
         weights = compute_weights(prices_df)
@@ -1220,12 +1228,20 @@ def simulator_historical(pid):
     scenario_name = data.get("scenario_name", "Historical 1")
     crisis = data.get("crisis", "COVID-19 Crash")
 
-    prices = generate_prices()
     stored = _sim_scenarios.get(pid, {})
-    markets = stored.get("_markets", list(prices.columns))
     weights = stored.get("_weights")
 
-    prices_df = prices[markets].dropna(how="all")
+    # Use cached stock-level prices from baseline, or build fresh
+    prices_df = stored.get("_prices_df")
+    if prices_df is None:
+        holdings = get_holdings(pid)
+        if holdings:
+            pf_prices, holdings, _ = _build_portfolio_prices(holdings)
+            prices_df = pf_prices if pf_prices is not None and len(pf_prices.columns) >= 1 else generate_prices()
+        else:
+            prices_df = generate_prices()
+
+    markets = list(prices_df.columns)
 
     if weights is None:
         weights = compute_weights(prices_df)
@@ -1270,10 +1286,17 @@ def simulator_classify(pid):
     factors = data.get("factors", ["FF5", "Mom"])
     shocks = data.get("shocks")
 
-    prices = generate_prices()
     stored = _sim_scenarios.get(pid, {})
-    markets = stored.get("_markets", list(prices.columns))
-    prices_df = prices[markets].dropna(how="all")
+
+    # Use cached stock-level prices from baseline, or build fresh
+    prices_df = stored.get("_prices_df")
+    if prices_df is None:
+        holdings = get_holdings(pid)
+        if holdings:
+            pf_prices, holdings, _ = _build_portfolio_prices(holdings)
+            prices_df = pf_prices if pf_prices is not None and len(pf_prices.columns) >= 1 else generate_prices()
+        else:
+            prices_df = generate_prices()
 
     result = classify_and_stress(prices_df, factors, shocks)
     return jsonify(_sanitize(result))
@@ -1303,7 +1326,7 @@ def simulator_scenarios(pid):
 def simulator_get_scenario(pid, name):
     """Get a specific scenario result."""
     stored = _sim_scenarios.get(pid, {})
-    if name not in stored:
+    if name not in stored or name.startswith("_"):
         return jsonify({"error": f"Scenario '{name}' not found"}), 404
     return jsonify(_sanitize(stored[name]))
 
