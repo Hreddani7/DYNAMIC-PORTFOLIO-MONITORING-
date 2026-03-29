@@ -152,7 +152,7 @@ async function doRegister(){const b=$('#rbtn');if(!b)return;b.disabled=true;b.te
 async function do2FA(){const b=$('#tbtn');if(!b)return;b.disabled=true;b.textContent='Verifying...';try{const r=await fetch('/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:_2faUser.username,password:_2faUser.password,totp_code:$('#tc').value})});const d=await r.json();if(d.error){$('#le').textContent=d.error;b.disabled=false;b.textContent='Verify';return;}TK=d.access_token;US={username:d.username,role:d.role};_2faUser=null;await initApp();}catch(e){$('#le').textContent='Connection error';b.disabled=false;b.textContent='Verify';}}
 async function initApp(){VW='upload';buildLayout();renderView();}
 function showLoading(){const c=$('#ct');if(c)c.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px">Computing 8 layers (InteliRisk)...</div></div>';}
-async function recompute(){showLoading();try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();renderView();}catch(e){console.error(e);}}
+async function recompute(){showLoading();_analyticsCache=null;try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();renderView();}catch(e){console.error(e);}}
 
 const TITLES={overview:'Dashboard Overview',risk:'Portfolio Risk Core',structural:'Structural & Network',factors:'African Factor Model',regime:'HMM Regime Detection',stress:'Stress Simulator',intel:'Intelligence Report',analytics:'Portfolio Analytics',holdings:'Portfolio Holdings',upload:'Upload Portfolio',trades:'Bloomberg & Live Data'};
 const NAVS=[{id:'overview',i:'◈',l:'Overview',s:'DASHBOARD'},{id:'analytics',i:'▣',l:'Analytics',s:'DASHBOARD'},{id:'risk',i:'△',l:'Risk Core',s:'ANALYTICS'},{id:'structural',i:'◎',l:'Structural',s:'ANALYTICS'},{id:'factors',i:'⊞',l:'Factors',s:'ANALYTICS'},{id:'regime',i:'◆',l:'Regime',s:'ANALYTICS'},{id:'stress',i:'⚡',l:'Stress Test',s:'ANALYTICS'},{id:'intel',i:'★',l:'Intelligence',s:'INSIGHTS'},{id:'holdings',i:'☰',l:'Holdings',s:'PORTFOLIO'},{id:'upload',i:'⊕',l:'Upload',s:'PORTFOLIO'},{id:'trades',i:'⇄',l:'Bloomberg',s:'DATA'}];
@@ -1558,38 +1558,17 @@ const sp=row.querySelector('.sp');
 if(sp){sp.className='';sp.style.cssText='width:10px;height:10px;font-size:10px;color:var(--gn)';sp.textContent='✓';}
 row.style.color='var(--gn)';
 }
-// Use SSE for real-time layer progress
+// Animate layer checkmarks on a realistic schedule while backend computes
+let layerIdx=0;
+const timings=[600,400,1500,4000,300,800,3000,500];
+const animateNext=()=>{if(layerIdx>=LAYERS.length)return;markDone(LAYERS[layerIdx].id);layerIdx++;if(layerIdx<LAYERS.length)setTimeout(animateNext,timings[layerIdx]||500);};
+setTimeout(animateNext,800);
 try{
-const es=new EventSource('/api/v1/portfolios/'+PID+'/compute-all?token='+TK);
-await new Promise((resolve,reject)=>{
-es.onmessage=function(ev){
-try{const d=JSON.parse(ev.data);
-if(d.layer==='DONE'){
-es.close();
-DT=d.result;
-// Mark L8 (analytics derived from result)
-markDone('L8');
+DT=await api('/api/v1/portfolios/'+PID+'/compute-all');
+// Mark all remaining layers done
+LAYERS.forEach(l=>markDone(l.id));
 progDiv.innerHTML+='<div style="margin-top:10px;color:var(--gn);font-weight:600;font-size:11px">✓ All layers computed. Redirecting to Dashboard...</div>';
-setTimeout(()=>{buildLayout();VW='overview';renderView();},800);
-resolve();
-}else if(d.status==='done'){
-markDone(d.layer);
-}}catch(e){}
-};
-es.onerror=function(){
-es.close();
-// Fallback: standard fetch
-api('/api/v1/portfolios/'+PID+'/compute-all').then(r=>{
-DT=r;LAYERS.forEach(l=>markDone(l.id));
-progDiv.innerHTML+='<div style="margin-top:10px;color:var(--gn);font-weight:600;font-size:11px">✓ All layers computed. Redirecting...</div>';
-setTimeout(()=>{buildLayout();VW='overview';renderView();},800);
-resolve();
-}).catch(e=>{
-progDiv.innerHTML+='<div style="margin-top:8px;color:var(--rd);font-size:10px">Error: '+e.message+'</div>';
-reject(e);
-});
-};
-});
+setTimeout(()=>{buildLayout();VW='overview';renderView();},600);
 }catch(e){progDiv.innerHTML+='<div style="margin-top:8px;color:var(--rd);font-size:10px">Error: '+e.message+'. Try refreshing.</div>';}
 }
 
@@ -1614,7 +1593,7 @@ const d=await r.json();
 if(d.error){
 status.innerHTML='<div style="color:var(--rd);padding:10px;background:rgba(240,96,96,.08);border-radius:6px;border:1px solid rgba(240,96,96,.2)"><div style="font-weight:600;margin-bottom:4px">Upload Error</div><div style="font-size:10px">'+d.error+'</div><div style="font-size:9px;color:var(--t3);margin-top:4px">Check file format: must have a symbol/ticker column. Supported: CSV, XLSX, XLS.</div></div>';
 return;}
-PID=d.portfolio_id;
+PID=d.portfolio_id;_analyticsCache=null;DT={};
 const mkts=Object.keys(d.markets_found||{}).join(', ')||'auto-detected';
 status.innerHTML='<div style="padding:12px;background:rgba(45,212,160,.08);border-radius:6px;border:1px solid rgba(45,212,160,.25)"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:22px;color:var(--gn)">&#10003;</span><span style="font-weight:600;color:var(--gn);font-size:12px">Portfolio Loaded Successfully</span></div><div style="font-size:10px;color:var(--t2)">'+d.holdings_count+' holdings detected on '+mkts+'</div></div>';
 // Auto compute with layer progress
