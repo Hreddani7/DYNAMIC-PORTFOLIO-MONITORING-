@@ -621,17 +621,18 @@ def compute_all(pid):
             l4 = compute_layer4(prices, enriched_holdings, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i); l4i = l4.pop("_internal", {})
             l5 = compute_layer5(prices, enriched_holdings, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i, l4_internal=l4i)
             l6 = compute_layer6(prices, enriched_holdings, l2_internal=l2i, l3_internal=l3i)
-            # L7 AI — short timeout
+            # L7 AI — give more time since we're in background thread
             l7_result = [None]
             def _run_l7():
                 try:
                     l7_result[0] = compute_layer7(l0, l2, l3, l4, l5, l6)
-                except Exception:
+                except Exception as ex:
+                    log.warning(f"[L7] AI failed: {ex}")
                     l7_result[0] = {"headline": "AI report generation skipped.", "alerts": [], "ai_source": "skipped"}
             t7 = threading.Thread(target=_run_l7, daemon=True)
             t7.start()
-            t7.join(timeout=12)
-            l7 = l7_result[0] or {"headline": "AI report generating in background...", "alerts": [], "ai_source": "pending"}
+            t7.join(timeout=30)  # 30s ok since user isn't waiting
+            l7 = l7_result[0] or {"headline": "AI report using rule-based engine.", "alerts": [], "ai_source": "rule-engine"}
             result = _build_result(pid, enriched_holdings, portfolio_markets, prices, l0, l2, l3, l4, l5, l6, l7)
             computed_cache[pid] = result
             _compute_jobs[pid] = {"status": "done", "result": result, "error": None}
@@ -688,7 +689,7 @@ def _compute_all_json(pid, holdings):
     l5 = compute_layer5(prices, holdings, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i, l4_internal=l4i)
     l6 = compute_layer6(prices, holdings, l2_internal=l2i, l3_internal=l3i)
 
-    # L7 AI — run with short timeout to avoid blocking
+    # L7 AI — run with timeout
     l7_result = [None]
     def _run_l7():
         try:
@@ -697,8 +698,8 @@ def _compute_all_json(pid, holdings):
             l7_result[0] = {"headline": "AI report generation skipped.", "alerts": [], "ai_source": "skipped"}
     t7 = threading.Thread(target=_run_l7, daemon=True)
     t7.start()
-    t7.join(timeout=12)  # Wait max 12s for AI
-    l7 = l7_result[0] or {"headline": "AI report generating in background...", "alerts": [], "ai_source": "pending"}
+    t7.join(timeout=30)
+    l7 = l7_result[0] or {"headline": "AI report using rule-based engine.", "alerts": [], "ai_source": "rule-engine"}
 
     result = _build_result(pid, holdings, portfolio_markets, prices, l0, l2, l3, l4, l5, l6, l7)
     computed_cache[pid] = result

@@ -398,7 +398,7 @@ def _call_hf_llm(prompt):
     if SYSTEM_PROMPT in content:
         content = content.replace(SYSTEM_PROMPT, "").strip()
 
-    client = InferenceClient(token=HF_TOKEN)
+    client = InferenceClient(token=HF_TOKEN, timeout=LLM_TIMEOUT)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": content},
