@@ -607,9 +607,9 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
     best_ll = -np.inf
     best_model = None
 
-    n_seeds = 20 if _HAS_HMMLEARN else 5
-    n_iter_full = 150 if _HAS_HMMLEARN else 60
-    n_iter_diag = 200 if _HAS_HMMLEARN else 80
+    n_seeds = 6 if _HAS_HMMLEARN else 5
+    n_iter_full = 80 if _HAS_HMMLEARN else 60
+    n_iter_diag = 80 if _HAS_HMMLEARN else 80
 
     # Strong covariance prior — prevents overly tight clusters that cause 100% assignments
     cov_prior = np.eye(D) * 0.5
@@ -668,12 +668,12 @@ def compute_layer4(prices, holdings, l0_internal=None, l2_internal=None, l3_inte
 
     # Last resort: accept any model
     if best_model is None:
-        for seed in range(5):
+        for seed in range(3):
             try:
                 m = HMM_CLS(
                     n_components=K,
                     covariance_type="diag",
-                    n_iter=100,
+                    n_iter=60,
                     tol=1e-4,
                     random_state=seed * 13 + 3,
                 )

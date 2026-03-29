@@ -1529,37 +1529,67 @@ el('tr',null,el('td',{cl:'mn'},'SOL'),el('td',null,'JSE'),el('td',{cl:'mn'},'100
 async function doComputeWithProgress(parentEl){
 if(!PID||!parentEl)return;
 const LAYERS=[
-{name:'Layer 0: HAR-RV Volatility & VaR/CVaR',time:800},
-{name:'Layer 2: PCA Structural & Correlation Network',time:1200},
-{name:'Layer 3: 6-Factor African Model',time:1000},
-{name:'Layer 4: HMM Regime Detection (30 features)',time:3000},
-{name:'Layer 5: Composite Risk Score',time:500},
-{name:'Layer 6: Stress Testing (10 scenarios)',time:1500},
-{name:'Layer 7: AI Intelligence Report',time:800},
-{name:'Layer 8: Portfolio Analytics',time:600}
+{id:'L0',name:'Layer 0: HAR-RV Volatility & VaR/CVaR'},
+{id:'L2',name:'Layer 2: PCA Structural & Correlation Network'},
+{id:'L3',name:'Layer 3: 6-Factor African Model'},
+{id:'L4',name:'Layer 4: HMM Regime Detection (30 features)'},
+{id:'L5',name:'Layer 5: Composite Risk Score'},
+{id:'L6',name:'Layer 6: Stress Testing (10 scenarios)'},
+{id:'L7',name:'Layer 7: AI Intelligence Report'},
+{id:'L8',name:'Layer 8: Portfolio Analytics'}
 ];
 const progDiv=document.createElement('div');
 progDiv.style.cssText='margin-top:10px;padding:14px;background:var(--b1);border-radius:8px;border:1px solid var(--bd)';
 progDiv.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--ac);margin-bottom:10px">Computing Risk Layers...</div>';
 parentEl.appendChild(progDiv);
-let layerIdx=0;
-const showLayer=()=>{if(layerIdx>=LAYERS.length)return;
-const l=LAYERS[layerIdx];
+// Show all layers upfront with spinners
+const layerRows={};
+LAYERS.forEach(l=>{
 const row=document.createElement('div');
 row.style.cssText='display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t3);margin-top:5px';
 row.innerHTML='<div class="sp" style="width:10px;height:10px;border-width:2px"></div> '+l.name;
 progDiv.appendChild(row);
-layerIdx++;
-if(layerIdx<LAYERS.length)setTimeout(showLayer,l.time);
+layerRows[l.id]=row;
+});
+function markDone(layerId){
+const row=layerRows[layerId];
+if(!row)return;
+const sp=row.querySelector('.sp');
+if(sp){sp.className='';sp.style.cssText='width:10px;height:10px;font-size:10px;color:var(--gn)';sp.textContent='✓';}
+row.style.color='var(--gn)';
+}
+// Use SSE for real-time layer progress
+try{
+const es=new EventSource('/api/v1/portfolios/'+PID+'/compute-all?token='+TK);
+await new Promise((resolve,reject)=>{
+es.onmessage=function(ev){
+try{const d=JSON.parse(ev.data);
+if(d.layer==='DONE'){
+es.close();
+DT=d.result;
+// Mark L8 (analytics derived from result)
+markDone('L8');
+progDiv.innerHTML+='<div style="margin-top:10px;color:var(--gn);font-weight:600;font-size:11px">✓ All layers computed. Redirecting to Dashboard...</div>';
+setTimeout(()=>{buildLayout();VW='overview';renderView();},800);
+resolve();
+}else if(d.status==='done'){
+markDone(d.layer);
+}}catch(e){}
 };
-setTimeout(showLayer,300);
-try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');
-// Mark all layers done
-progDiv.querySelectorAll('.sp').forEach(s=>{s.className='';s.style.cssText='width:10px;height:10px;font-size:10px;color:var(--gn)';s.textContent='✓';});
-const rows=progDiv.querySelectorAll('div[style*="color:var(--t3)"]');
-rows.forEach(d=>{if(d.querySelector&&!d.querySelector('div'))d.style.color='var(--gn)';});
-progDiv.innerHTML+='<div style="margin-top:10px;color:var(--gn);font-weight:600;font-size:11px">✓ All 8 layers computed. Redirecting to Dashboard...</div>';
-setTimeout(()=>{buildLayout();VW='overview';renderView();},1200);
+es.onerror=function(){
+es.close();
+// Fallback: standard fetch
+api('/api/v1/portfolios/'+PID+'/compute-all').then(r=>{
+DT=r;LAYERS.forEach(l=>markDone(l.id));
+progDiv.innerHTML+='<div style="margin-top:10px;color:var(--gn);font-weight:600;font-size:11px">✓ All layers computed. Redirecting...</div>';
+setTimeout(()=>{buildLayout();VW='overview';renderView();},800);
+resolve();
+}).catch(e=>{
+progDiv.innerHTML+='<div style="margin-top:8px;color:var(--rd);font-size:10px">Error: '+e.message+'</div>';
+reject(e);
+});
+};
+});
 }catch(e){progDiv.innerHTML+='<div style="margin-top:8px;color:var(--rd);font-size:10px">Error: '+e.message+'. Try refreshing.</div>';}
 }
 

@@ -304,8 +304,18 @@ def _load_ibkr_data():
 
         def _tws_worker():
             try:
-                ibkr = get_ibkr(auto_connect=True)
-                if not ibkr.is_connected():
+                import sys, io, logging as _log
+                # Suppress noisy ib_insync connection errors
+                _log.getLogger("ib_insync").setLevel(_log.CRITICAL)
+                _old_stderr = sys.stderr
+                sys.stderr = io.StringIO()
+                try:
+                    ibkr = get_ibkr(auto_connect=True)
+                    connected = ibkr.is_connected()
+                finally:
+                    sys.stderr = _old_stderr
+                    _log.getLogger("ib_insync").setLevel(_log.WARNING)
+                if not connected:
                     return
                 prices_d, macro_d, stocks_raw = ibkr.fetch_all_historical()
                 _result[0] = prices_d

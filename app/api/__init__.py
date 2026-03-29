@@ -427,6 +427,8 @@ TICKER_TO_INTERNAL = {
 }
 
 
+_pf_price_cache = {}  # {frozenset(tickers): (pf_prices, enriched_holdings, markets)}
+
 def _build_portfolio_prices(holdings):
     """Build a multi-column price DataFrame from portfolio holdings' matched stock data.
     Also enriches holdings with _price_series and _internal_name.
@@ -435,6 +437,20 @@ def _build_portfolio_prices(holdings):
     portfolio_prices_df has one column per holding ticker (e.g. NPN, SBK, GFI)
     so all layers compute risk on the ACTUAL portfolio stocks.
     """
+    # Cache key: set of tickers in this portfolio
+    tickers_key = frozenset(h.get("asset_id", "").split(".")[0].upper() for h in holdings)
+    if tickers_key in _pf_price_cache:
+        cached_prices, _, cached_markets = _pf_price_cache[tickers_key]
+        # Re-enrich holdings with cached price series
+        for h in holdings:
+            tk = h.get("asset_id", "").split(".")[0].upper()
+            if tk in cached_prices.columns:
+                h["_price_series"] = cached_prices[tk]
+                h["_internal_name"] = tk
+            mkt = h.get("market", "")
+            if mkt:
+                cached_markets.add(mkt)
+        return cached_prices.copy(), holdings, cached_markets
     from app.ingestion import generate_stocks_per_market
     stocks = generate_stocks_per_market()
 
@@ -537,10 +553,14 @@ def _build_portfolio_prices(holdings):
     else:
         pf_prices = None
 
+    # Cache for reuse
+    if pf_prices is not None:
+        _pf_price_cache[tickers_key] = (pf_prices.copy(), None, set(portfolio_markets))
+
     return pf_prices, holdings, portfolio_markets
 
 
-# ═══ COMPUTE ALL 8 LAYERS ═══
+# ═══ COMPUTE ALL 8 LAYERS (SSE streaming) ═══
 @api.route("/portfolios/<pid>/compute-all")
 @token_required
 def compute_all(pid):
@@ -548,12 +568,19 @@ def compute_all(pid):
     if not holdings:
         return jsonify({"error": "Portfolio not found or empty"}), 404
 
-    market_prices = generate_prices()  # Market index (for macro/factor layers)
+    # Check if client wants SSE streaming
+    accept = request.headers.get("Accept", "")
+    if "text/event-stream" in accept:
+        return _compute_all_sse(pid, holdings)
 
-    # Build portfolio stock price DataFrame — THIS is what layers compute on
+    # Standard JSON response (non-streaming)
+    return _compute_all_json(pid, holdings)
+
+
+def _compute_all_json(pid, holdings):
+    """Standard blocking compute-all — returns full JSON at once."""
+    market_prices = generate_prices()
     pf_prices, holdings, portfolio_markets = _build_portfolio_prices(holdings)
-
-    # Use portfolio stock prices for all layers if available, else market index
     prices = pf_prices if pf_prices is not None and len(pf_prices.columns) >= 1 else market_prices
 
     l0 = compute_layer0(prices, holdings); l0i = l0.pop("_internal", {})
@@ -562,9 +589,87 @@ def compute_all(pid):
     l4 = compute_layer4(prices, holdings, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i); l4i = l4.pop("_internal", {})
     l5 = compute_layer5(prices, holdings, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i, l4_internal=l4i)
     l6 = compute_layer6(prices, holdings, l2_internal=l2i, l3_internal=l3i)
-    l7 = compute_layer7(l0, l2, l3, l4, l5, l6)
 
-    # Portfolio info
+    # L7 AI — run with short timeout to avoid blocking
+    import threading
+    l7_result = [None]
+    def _run_l7():
+        try:
+            l7_result[0] = compute_layer7(l0, l2, l3, l4, l5, l6)
+        except Exception:
+            l7_result[0] = {"headline": "AI report generation skipped.", "alerts": [], "ai_source": "skipped"}
+    t7 = threading.Thread(target=_run_l7, daemon=True)
+    t7.start()
+    t7.join(timeout=12)  # Wait max 12s for AI
+    l7 = l7_result[0] or {"headline": "AI report generating in background...", "alerts": [], "ai_source": "pending"}
+
+    result = _build_result(pid, holdings, portfolio_markets, prices, l0, l2, l3, l4, l5, l6, l7)
+    computed_cache[pid] = result
+    return jsonify(_sanitize(result))
+
+
+def _compute_all_sse(pid, holdings):
+    """SSE streaming — sends layer-done events as each layer completes."""
+    from flask import Response
+    import json as _json
+
+    def generate():
+        market_prices = generate_prices()
+        pf_prices, h2, portfolio_markets = _build_portfolio_prices(holdings)
+        prices = pf_prices if pf_prices is not None and len(pf_prices.columns) >= 1 else market_prices
+
+        def emit(layer, status="done"):
+            return f"data: {_json.dumps({'layer': layer, 'status': status})}\n\n"
+
+        # L0
+        l0 = compute_layer0(prices, h2); l0i = l0.pop("_internal", {})
+        yield emit("L0")
+
+        # L2
+        l2 = compute_layer2(prices, h2); l2i = l2.pop("_internal", {})
+        yield emit("L2")
+
+        # L3
+        l3 = compute_layer3(market_prices, h2, l2_internal=l2i); l3i = l3.pop("_internal", {})
+        yield emit("L3")
+
+        # L4
+        l4 = compute_layer4(prices, h2, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i); l4i = l4.pop("_internal", {})
+        yield emit("L4")
+
+        # L5
+        l5 = compute_layer5(prices, h2, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i, l4_internal=l4i)
+        yield emit("L5")
+
+        # L6
+        l6 = compute_layer6(prices, h2, l2_internal=l2i, l3_internal=l3i)
+        yield emit("L6")
+
+        # L7 — with short timeout
+        import threading
+        l7_result = [None]
+        def _run_l7():
+            try:
+                l7_result[0] = compute_layer7(l0, l2, l3, l4, l5, l6)
+            except Exception:
+                l7_result[0] = {"headline": "AI report skipped.", "alerts": [], "ai_source": "skipped"}
+        t7 = threading.Thread(target=_run_l7, daemon=True)
+        t7.start()
+        t7.join(timeout=12)
+        l7 = l7_result[0] or {"headline": "AI report generating...", "alerts": [], "ai_source": "pending"}
+        yield emit("L7")
+
+        # Build final result
+        result = _build_result(pid, h2, portfolio_markets, prices, l0, l2, l3, l4, l5, l6, l7)
+        computed_cache[pid] = result
+        yield f"data: {_json.dumps({'layer': 'DONE', 'status': 'done', 'result': _sanitize(result)})}\n\n"
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _build_result(pid, holdings, portfolio_markets, prices, l0, l2, l3, l4, l5, l6, l7):
+    """Build the final compute-all result dict."""
     pf_info = {"total_value": sum(h.get("market_value", 0) for h in holdings),
                "n_holdings": len(holdings),
                "markets": list(portfolio_markets),
@@ -572,22 +677,19 @@ def compute_all(pid):
                "holdings_total": len(holdings),
                "stocks_in_prices": list(prices.columns) if hasattr(prices, 'columns') else []}
 
-    # Clean internal fields from holdings before sending to frontend
     clean_holdings = []
     for h in holdings:
         ch = {k: v for k, v in h.items() if not k.startswith("_")}
         ch["data_matched"] = h.get("_price_series") is not None
         clean_holdings.append(ch)
 
-    result = {
+    return {
         "portfolio_id": pid, "computed_at": datetime.now().isoformat(), "engine": "InteliRisk v4.0",
         "portfolio_info": pf_info,
         "portfolio_holdings": clean_holdings,
         "risk_core": l0, "structural": l2, "factors": l3, "regime": l4,
         "score": l5, "stress": l6, "intelligence": l7,
     }
-    computed_cache[pid] = result
-    return jsonify(_sanitize(result))
 
 
 # ═══ INDIVIDUAL LAYERS ═══

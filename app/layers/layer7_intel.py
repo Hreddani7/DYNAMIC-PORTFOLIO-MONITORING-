@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 HF_MODEL_PRIMARY = "Qwen/Qwen2.5-72B-Instruct"
 HF_MODEL_FALLBACK = "meta-llama/Llama-3.1-8B-Instruct"
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
-LLM_TIMEOUT = 90  # seconds
+LLM_TIMEOUT = 10  # seconds — keep fast for demo, fallback to rule-based
 LLM_MAX_TOKENS = 1500
 LLM_TEMPERATURE = 0.3  # Low temp for analytical precision
 

@@ -49,6 +49,8 @@ def token_required(f):
     def decorated(*args, **kwargs):
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not token:
+            token = request.args.get("token", "")  # SSE fallback (EventSource can't set headers)
+        if not token:
             return jsonify({"error": "Authentication required"}), 401
         try:
             request.user = pyjwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
