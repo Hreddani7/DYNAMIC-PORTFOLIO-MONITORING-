@@ -78,7 +78,7 @@
 <body>
 <div id="root"></div>
 <script>
-let TK=null,US=null,PID=null,DT={},VW='overview',CO=false,CH=[],CTS={},_liveTimer=null;
+let TK=null,US=null,PID=null,DT={},VW='overview',CO=false,CH=[],CTS={},_liveTimer=null,_computePollTimer=null,_computing=false;
 const RCLR={'Stable Growth':'#1E6B2E','Commodity Expansion':'#2E75B6','USD Tightening':'#C9A227','Sovereign Stress':'#E67E22','Systemic Crisis':'#C0392B'};
 const MARKETS={JSE_SA:{name:'JSE (South Africa)',short:'JSE',currency:'ZAR',color:'#1F4E79'},MASI_MA:{name:'MASI (Morocco)',short:'MASI',currency:'MAD',color:'#2E75B6'},EGX_EG:{name:'EGX (Egypt)',short:'EGX',currency:'EGP',color:'#C9A227'},NGX_NG:{name:'NGX (Nigeria)',short:'NGX',currency:'NGN',color:'#E67E22'}};
 
@@ -152,7 +152,23 @@ async function doRegister(){const b=$('#rbtn');if(!b)return;b.disabled=true;b.te
 async function do2FA(){const b=$('#tbtn');if(!b)return;b.disabled=true;b.textContent='Verifying...';try{const r=await fetch('/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:_2faUser.username,password:_2faUser.password,totp_code:$('#tc').value})});const d=await r.json();if(d.error){$('#le').textContent=d.error;b.disabled=false;b.textContent='Verify';return;}TK=d.access_token;US={username:d.username,role:d.role};_2faUser=null;await initApp();}catch(e){$('#le').textContent='Connection error';b.disabled=false;b.textContent='Verify';}}
 async function initApp(){VW='upload';buildLayout();renderView();}
 function showLoading(){const c=$('#ct');if(c)c.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px">Computing 8 layers (InteliRisk)...</div></div>';}
-async function recompute(){showLoading();_analyticsCache=null;try{DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();renderView();}catch(e){console.error(e);}}
+function stopComputePoll(){if(_computePollTimer){clearInterval(_computePollTimer);_computePollTimer=null;}}
+function startComputePoll(){
+stopComputePoll();_computing=true;
+_computePollTimer=setInterval(async()=>{
+if(!PID)return stopComputePoll();
+try{const r=await api('/api/v1/portfolios/'+PID+'/compute-status');
+if(r.status==='done'&&r.result){DT=r.result;_computing=false;_analyticsCache=null;stopComputePoll();
+// Update computing banner if visible
+const bn=document.getElementById('compute-banner');if(bn)bn.innerHTML='<span style="color:var(--gn)">&#10003; All 8 layers computed</span>';
+buildLayout();renderView();}
+}catch(e){console.error('poll err',e);}
+},2000);}
+async function recompute(){if(!PID)return;_analyticsCache=null;_computing=true;
+try{const r=await api('/api/v1/portfolios/'+PID+'/compute-all?refresh=1');
+if(r.status==='computing'){if(r.portfolio_info)DT.portfolio_info=r.portfolio_info;if(r.portfolio_holdings)DT.portfolio_holdings=r.portfolio_holdings;startComputePoll();}
+else{DT=r;_computing=false;}
+buildLayout();renderView();}catch(e){console.error(e);_computing=false;}}
 
 const TITLES={overview:'Dashboard Overview',risk:'Portfolio Risk Core',structural:'Structural & Network',factors:'African Factor Model',regime:'HMM Regime Detection',stress:'Stress Simulator',intel:'Intelligence Report',analytics:'Portfolio Analytics',holdings:'Portfolio Holdings',upload:'Upload Portfolio',trades:'Bloomberg & Live Data'};
 const NAVS=[{id:'overview',i:'◈',l:'Overview',s:'DASHBOARD'},{id:'analytics',i:'▣',l:'Analytics',s:'DASHBOARD'},{id:'risk',i:'△',l:'Risk Core',s:'ANALYTICS'},{id:'structural',i:'◎',l:'Structural',s:'ANALYTICS'},{id:'factors',i:'⊞',l:'Factors',s:'ANALYTICS'},{id:'regime',i:'◆',l:'Regime',s:'ANALYTICS'},{id:'stress',i:'⚡',l:'Stress Test',s:'ANALYTICS'},{id:'intel',i:'★',l:'Intelligence',s:'INSIGHTS'},{id:'holdings',i:'☰',l:'Holdings',s:'PORTFOLIO'},{id:'upload',i:'⊕',l:'Upload',s:'PORTFOLIO'},{id:'trades',i:'⇄',l:'Bloomberg',s:'DATA'}];
@@ -166,12 +182,22 @@ async function sendChat(){const inp=$('#cin');if(!inp)return;const msg=inp.value
 function refreshChatUI(){const c=$('#cms');if(!c)return;c.innerHTML='';CH.forEach(m=>{const d=document.createElement('div');d.className='cm '+(m.r==='user'?'cm-u':'cm-a');d.textContent=m.t;c.appendChild(d);});c.scrollTop=c.scrollHeight;}
 
 function renderView(){const ct=$('#ct');if(!ct)return;ct.innerHTML='';destroyCharts();if(_liveTimer&&VW!=='trades'){clearInterval(_liveTimer);_liveTimer=null;}
-// If no portfolio loaded or no computed data, and not on upload/trades page, show empty state
-if((!PID||!DT||!Object.keys(DT).length)&&VW!=='upload'&&VW!=='trades'&&VW!=='holdings'){ct.appendChild(el('div',{st:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'400px',gap:'16px'}},
+// Allow upload/trades/holdings pages always. For analysis pages, need PID.
+if(!PID&&VW!=='upload'&&VW!=='trades'){ct.appendChild(el('div',{st:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'400px',gap:'16px'}},
 el('div',{st:{fontSize:'48px',opacity:'0.3'}},'⊕'),
 el('div',{st:{fontSize:'14px',color:'var(--t2)',fontWeight:'500'}},'No Portfolio Data'),
 el('div',{st:{fontSize:'11px',color:'var(--t3)',maxWidth:'340px',textAlign:'center',lineHeight:'1.6'}},'Upload your portfolio first. The risk engine will compute all 8 layers and you\'ll see the full analysis here.'),
 el('button',{cl:'btn',st:{marginTop:'8px'},onClick:()=>{VW='upload';buildLayout();renderView();}},'Go to Upload')
+));return;}
+// If computing and we don't have the needed layer data yet, show computing state (but allow holdings)
+const needsLayers=VW!=='upload'&&VW!=='trades'&&VW!=='holdings';
+const hasLayerData=DT&&DT.risk_core;
+if(PID&&needsLayers&&!hasLayerData){
+ct.appendChild(el('div',{st:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'400px',gap:'16px'}},
+el('div',{cl:'sp',st:{width:'28px',height:'28px'}}),
+el('div',{id:'compute-banner',st:{fontSize:'13px',color:'var(--ac)',fontWeight:'600'}},'Computing 8 risk layers...'),
+el('div',{st:{fontSize:'10px',color:'var(--t3)',maxWidth:'340px',textAlign:'center',lineHeight:'1.6'}},'The risk engine is analyzing your portfolio. Holdings are already available in the sidebar. This page will update automatically when done.'),
+el('button',{cl:'btn btn-ghost',st:{marginTop:'4px',width:'auto',padding:'6px 14px',fontSize:'10px'},onClick:()=>{VW='holdings';buildLayout();renderView();}},'View Holdings')
 ));return;}
 try{({overview:vOverview,analytics:vAnalytics,risk:vRisk,structural:vStructural,factors:vFactors,regime:vRegime,stress:vStress,intel:vIntel,holdings:vHoldings,upload:vUpload,trades:vTrades}[VW]||vOverview)(ct);}catch(e){console.error('View ['+VW+']:',e);ct.innerHTML='<div class="ld" style="color:var(--rd)">Error: '+e.message+'</div>';}}
 
@@ -390,7 +416,8 @@ if(cv5){CTS['ag5']=new Chart(cv5,{type:'bar',data:{labels:sortedCK,datasets:[{la
 },80);
 
 }catch(e){
-ct.innerHTML='<div class="ld" style="color:var(--rd)">Analytics error: '+e.message+'</div>';
+if(_computing){ct.innerHTML='<div class="ld"><div class="sp"></div><div style="font-size:11px;color:var(--ac)">Analytics will be available once risk layers finish computing...</div></div>';}
+else{ct.innerHTML='<div class="ld" style="color:var(--rd)"><div style="margin-bottom:8px">Analytics error: '+e.message+'</div><button class="btn btn-ghost" style="width:auto;padding:6px 14px;font-size:10px" onclick="recompute()">Recompute Layers</button></div>';}
 console.error('Analytics:',e);
 }
 }
@@ -1469,7 +1496,9 @@ st.textContent=r.connected?'Connected':'Failed';st.style.background=r.connected?
 }},'Connect'),
 el('button',{cl:'tbtn tbtn-a',st:{fontSize:'10px'},onClick:async()=>{
 try{const r=await api('/api/v1/ibkr/import-portfolio',{method:'POST',body:JSON.stringify({name:'IBKR Portfolio'})});
-PID=r.portfolio_id;showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();VW='overview';renderView();
+PID=r.portfolio_id;_analyticsCache=null;DT={};
+const st2=document.getElementById('up-status')||document.createElement('div');
+doComputeWithProgress(st2);
 }catch(e){alert('IBKR import failed: '+e.message);}
 }},'Import Portfolio from TWS')),
 el('div',{st:{fontSize:'9px',color:'var(--t3)',marginTop:'6px'}},'TWS Workstation must be running. Paper: 7497, Live: 7496, Gateway: 4001/4002')));
@@ -1493,11 +1522,11 @@ el('input',{type:'file',id:'up-file',accept:'.csv,.xlsx,.xls,.tsv',st:{display:'
 el('div',{id:'up-status',st:{fontSize:'10px',color:'var(--t3)',minHeight:'20px'}}),
 el('div',{st:{marginTop:'10px',display:'flex',gap:'8px'}},
 el('button',{cl:'btn',st:{width:'auto',padding:'8px 16px',fontSize:'11px',background:'var(--b3)',color:'var(--t2)',border:'1px solid var(--bd)'},onClick:async()=>{
-try{const r=await api('/api/v1/portfolios/create-sample',{method:'POST'});PID=r.portfolio_id;
+try{const r=await api('/api/v1/portfolios/create-sample',{method:'POST'});PID=r.portfolio_id;_analyticsCache=null;DT={};
 const st=document.getElementById('up-status');
 if(st){st.innerHTML='<div style="padding:10px;background:rgba(45,212,160,.08);border-radius:6px;border:1px solid rgba(45,212,160,.25)"><span style="color:var(--gn);font-weight:600">✓ Sample portfolio created</span> — '+r.holdings+' holdings</div>';
 doComputeWithProgress(st);}
-else{showLoading();DT=await api('/api/v1/portfolios/'+PID+'/compute-all');buildLayout();VW='overview';renderView();}
+else{doComputeWithProgress(document.createElement('div'));}
 }catch(e){alert('Error: '+e.message);}
 }},'Use Sample Portfolio'),
 el('button',{cl:'btn',st:{width:'auto',padding:'8px 16px',fontSize:'11px',background:'var(--b3)',color:'var(--ac)',border:'1px solid var(--ac)'},onClick:()=>{
@@ -1542,7 +1571,6 @@ const progDiv=document.createElement('div');
 progDiv.style.cssText='margin-top:10px;padding:14px;background:var(--b1);border-radius:8px;border:1px solid var(--bd)';
 progDiv.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--ac);margin-bottom:10px">Computing Risk Layers...</div>';
 parentEl.appendChild(progDiv);
-// Show all layers upfront with spinners
 const layerRows={};
 LAYERS.forEach(l=>{
 const row=document.createElement('div');
@@ -1552,30 +1580,49 @@ progDiv.appendChild(row);
 layerRows[l.id]=row;
 });
 function markDone(layerId){
-const row=layerRows[layerId];
-if(!row)return;
+const row=layerRows[layerId];if(!row)return;
 const sp=row.querySelector('.sp');
 if(sp){sp.className='';sp.style.cssText='width:10px;height:10px;font-size:10px;color:var(--gn)';sp.textContent='✓';}
 row.style.color='var(--gn)';
 }
-// Animate layer checkmarks on a realistic schedule while backend computes
+// Kick off async compute (returns instantly with holdings)
+try{
+const r=await api('/api/v1/portfolios/'+PID+'/compute-all');
+if(r.status==='computing'){
+// We got instant response — store portfolio info + holdings for navigation
+DT={portfolio_id:r.portfolio_id,portfolio_info:r.portfolio_info,portfolio_holdings:r.portfolio_holdings,computed_at:r.computed_at,engine:r.engine};
+// Animate layer checkmarks while polling for real results
 let layerIdx=0;
 const timings=[600,400,1500,4000,300,800,3000,500];
 const animateNext=()=>{if(layerIdx>=LAYERS.length)return;markDone(LAYERS[layerIdx].id);layerIdx++;if(layerIdx<LAYERS.length)setTimeout(animateNext,timings[layerIdx]||500);};
 setTimeout(animateNext,800);
-try{
-DT=await api('/api/v1/portfolios/'+PID+'/compute-all');
-// Mark all remaining layers done
+// Poll for completion
+const pollId=setInterval(async()=>{
+try{const s=await api('/api/v1/portfolios/'+PID+'/compute-status');
+if(s.status==='done'&&s.result){
+clearInterval(pollId);DT=s.result;_computing=false;_analyticsCache=null;
 LAYERS.forEach(l=>markDone(l.id));
 progDiv.innerHTML+='<div style="margin-top:10px;color:var(--gn);font-weight:600;font-size:11px">✓ All layers computed. Redirecting to Dashboard...</div>';
 setTimeout(()=>{buildLayout();VW='overview';renderView();},600);
+}else if(s.status==='error'){
+clearInterval(pollId);_computing=false;
+progDiv.innerHTML+='<div style="margin-top:8px;color:var(--rd);font-size:10px">Error: '+(s.error||'Unknown')+'. Try refreshing.</div>';
+}}catch(ex){}
+},2000);
+_computing=true;
+}else{
+// Got full result instantly (was cached)
+DT=r;_computing=false;
+LAYERS.forEach(l=>markDone(l.id));
+progDiv.innerHTML+='<div style="margin-top:10px;color:var(--gn);font-weight:600;font-size:11px">✓ All layers computed. Redirecting to Dashboard...</div>';
+setTimeout(()=>{buildLayout();VW='overview';renderView();},600);
+}
 }catch(e){progDiv.innerHTML+='<div style="margin-top:8px;color:var(--rd);font-size:10px">Error: '+e.message+'. Try refreshing.</div>';}
 }
 
 async function doUpload(file){
 const status=document.getElementById('up-status');
 if(!status)return;
-// Validate file type
 const ext=file.name.split('.').pop().toLowerCase();
 if(!['csv','xlsx','xls','tsv'].includes(ext)){
 status.innerHTML='<div style="color:var(--rd);padding:8px;background:rgba(240,96,96,.08);border-radius:5px;border:1px solid rgba(240,96,96,.2)"><b>Invalid format</b> — Upload a CSV, XLSX, or XLS file. Got: .'+ext+'</div>';
@@ -1596,7 +1643,6 @@ return;}
 PID=d.portfolio_id;_analyticsCache=null;DT={};
 const mkts=Object.keys(d.markets_found||{}).join(', ')||'auto-detected';
 status.innerHTML='<div style="padding:12px;background:rgba(45,212,160,.08);border-radius:6px;border:1px solid rgba(45,212,160,.25)"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:22px;color:var(--gn)">&#10003;</span><span style="font-weight:600;color:var(--gn);font-size:12px">Portfolio Loaded Successfully</span></div><div style="font-size:10px;color:var(--t2)">'+d.holdings_count+' holdings detected on '+mkts+'</div></div>';
-// Auto compute with layer progress
 doComputeWithProgress(status);
 }catch(e){status.innerHTML='<div style="color:var(--rd);padding:10px;background:rgba(240,96,96,.08);border-radius:6px;border:1px solid rgba(240,96,96,.2)"><div style="font-weight:600;margin-bottom:4px">Upload Failed</div><div style="font-size:10px">'+e.message+'</div><div style="font-size:9px;color:var(--t3);margin-top:4px">Check your connection and try again.</div></div>';}
 }

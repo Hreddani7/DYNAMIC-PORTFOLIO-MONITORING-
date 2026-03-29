@@ -45,14 +45,16 @@ def har_rv(r):
 
 
 def hist_var_cvar(ra, alpha=0.05, win=WIN_VAR):
-    """Rolling historical VaR and CVaR (Expected Shortfall)."""
+    """Rolling historical VaR and CVaR (Expected Shortfall).
+    Optimized: compute every 5th step + last 10 for speed."""
     n = len(ra)
     v = np.full(n, np.nan)
     cv = np.full(n, np.nan)
-    # Adapt window to data length
     eff_win = min(win, max(n - 1, 5))
     start = max(eff_win, 5)
-    for t in range(start, n):
+    # Compute at sampled points for speed
+    compute_pts = set(range(start, n, 5)) | set(range(max(start, n - 10), n))
+    for t in compute_pts:
         w = min(eff_win, t)
         L = -np.sort(ra[t - w:t])[::-1]
         k = max(int(np.ceil(alpha * w)), 1)
@@ -64,7 +66,10 @@ def hist_var_cvar(ra, alpha=0.05, win=WIN_VAR):
         k = max(int(np.ceil(alpha * n)), 1)
         v[-1] = L[min(k - 1, len(L) - 1)]
         cv[-1] = L[:k].mean()
-    return v, cv
+    # Interpolate gaps for smooth time series
+    v_s = pd.Series(v).interpolate(method='linear', limit_direction='both').values
+    cv_s = pd.Series(cv).interpolate(method='linear', limit_direction='both').values
+    return v_s, cv_s
 
 
 def param_var(r, alpha=0.05, win=WIN_VAR):
@@ -77,22 +82,28 @@ def param_var(r, alpha=0.05, win=WIN_VAR):
 
 
 def cf_var(r, alpha=0.05, win=WIN_VAR):
-    """Cornish-Fisher VaR — adjusts for skewness and kurtosis."""
+    """Cornish-Fisher VaR — adjusts for skewness and kurtosis.
+    Optimized: compute only at last point + a few samples for time series."""
     r = pd.Series(r)
     n = len(r)
     v = np.full(n, np.nan)
     eff_win = min(win, max(n - 1, 5))
-    for t in range(eff_win, n):
+    z = norm.ppf(alpha)
+    # Only compute at sampled intervals for speed (every 5th point + last 10)
+    compute_pts = set(range(eff_win, n, 5)) | set(range(max(eff_win, n - 10), n))
+    for t in compute_pts:
         s = r.iloc[max(0, t - eff_win):t].values
         mu, sg = s.mean(), s.std(ddof=1)
         if sg == 0:
             continue
-        z = norm.ppf(alpha)
         sk = sp_skew(s)
         ku = sp_kurt(s)
         zcf = z + (z ** 2 - 1) * sk / 6 + (z ** 3 - 3 * z) * ku / 24 - (2 * z ** 3 - 5 * z) * sk ** 2 / 36
         v[t] = -(mu + zcf * sg)
-    return v
+    # Interpolate gaps
+    v_s = pd.Series(v)
+    v_s = v_s.interpolate(method='linear', limit_direction='both')
+    return v_s.values
 
 
 def rolling_dd(r_pct):
@@ -139,6 +150,8 @@ def component_var(rpanel, alpha=0.05, win=WIN_VAR):
 
 def compute_layer0(prices, holdings):
     """Full Layer 0 computation with InteliRisk v4 methods."""
+    # Limit data to last 504 trading days (~2y) for speed
+    prices = prices.iloc[-504:] if len(prices) > 504 else prices
     # Build per-market returns
     ret_all = (np.log(prices / prices.shift(1)) * 100).dropna(how="all")
     # Adaptive: use markets with at least 10 data points (not 100)

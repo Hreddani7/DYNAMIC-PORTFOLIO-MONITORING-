@@ -1,5 +1,5 @@
 """API Routes — CSV/Excel upload + 8-layer compute + AI chat + Bloomberg live."""
-import os, uuid, time, random, math, io
+import os, uuid, time, random, math, io, threading, logging
 from datetime import datetime
 
 import numpy as np
@@ -23,9 +23,11 @@ from app.layers.layer6_simulator import (
 )
 from app.assistant import PortfolioAssistant
 
+log = logging.getLogger(__name__)
 api = Blueprint("api", __name__, url_prefix="/api/v1")
 assistant = PortfolioAssistant()
 computed_cache = {}
+_compute_jobs = {}  # {pid: {"status": "running"|"done"|"error", "result": ..., "error": ...}}
 
 
 def _sanitize(obj):
@@ -560,7 +562,7 @@ def _build_portfolio_prices(holdings):
     return pf_prices, holdings, portfolio_markets
 
 
-# ═══ COMPUTE ALL 8 LAYERS (SSE streaming) ═══
+# ═══ COMPUTE ALL 8 LAYERS ═══
 @api.route("/portfolios/<pid>/compute-all")
 @token_required
 def compute_all(pid):
@@ -568,13 +570,109 @@ def compute_all(pid):
     if not holdings:
         return jsonify({"error": "Portfolio not found or empty"}), 404
 
-    # Check if client wants SSE streaming
-    accept = request.headers.get("Accept", "")
-    if "text/event-stream" in accept:
-        return _compute_all_sse(pid, holdings)
+    # If already computed, return cached result immediately (unless refresh requested)
+    refresh = request.args.get("refresh", "0") == "1"
+    if refresh:
+        computed_cache.pop(pid, None)
+        _compute_jobs.pop(pid, None)
+        _pf_price_cache.clear()  # Clear price cache for re-fetch
+    elif pid in computed_cache:
+        return jsonify(_sanitize(computed_cache[pid]))
 
-    # Standard JSON response (non-streaming)
-    return _compute_all_json(pid, holdings)
+    # Check if async mode requested (default: yes for speed)
+    mode = request.args.get("mode", "async")
+
+    if mode == "sync":
+        return _compute_all_json(pid, holdings)
+
+    # ── Async mode: kick off background thread, return immediately ──
+    if pid in _compute_jobs and _compute_jobs[pid]["status"] == "running":
+        # Already computing, return status
+        return jsonify({"status": "computing", "portfolio_id": pid})
+
+    # Build quick portfolio info for immediate display
+    pf_prices, enriched_holdings, portfolio_markets = _build_portfolio_prices(holdings)
+    clean_holdings = []
+    for h in enriched_holdings:
+        ch = {k: v for k, v in h.items() if not k.startswith("_")}
+        ch["data_matched"] = h.get("_price_series") is not None
+        clean_holdings.append(ch)
+
+    pf_info = {
+        "total_value": sum(h.get("market_value", 0) for h in holdings),
+        "n_holdings": len(holdings),
+        "markets": list(portfolio_markets),
+        "holdings_matched": sum(1 for h in clean_holdings if h.get("data_matched")),
+        "holdings_total": len(holdings),
+        "stocks_in_prices": list(pf_prices.columns) if pf_prices is not None and hasattr(pf_prices, 'columns') else [],
+    }
+
+    # Start background computation
+    _compute_jobs[pid] = {"status": "running", "result": None, "error": None}
+
+    def _bg_compute():
+        try:
+            market_prices = generate_prices()
+            # Re-use already-built prices (cached)
+            prices = pf_prices if pf_prices is not None and len(pf_prices.columns) >= 1 else market_prices
+            l0 = compute_layer0(prices, enriched_holdings); l0i = l0.pop("_internal", {})
+            l2 = compute_layer2(prices, enriched_holdings); l2i = l2.pop("_internal", {})
+            l3 = compute_layer3(market_prices, enriched_holdings, l2_internal=l2i); l3i = l3.pop("_internal", {})
+            l4 = compute_layer4(prices, enriched_holdings, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i); l4i = l4.pop("_internal", {})
+            l5 = compute_layer5(prices, enriched_holdings, l0_internal=l0i, l2_internal=l2i, l3_internal=l3i, l4_internal=l4i)
+            l6 = compute_layer6(prices, enriched_holdings, l2_internal=l2i, l3_internal=l3i)
+            # L7 AI — short timeout
+            l7_result = [None]
+            def _run_l7():
+                try:
+                    l7_result[0] = compute_layer7(l0, l2, l3, l4, l5, l6)
+                except Exception:
+                    l7_result[0] = {"headline": "AI report generation skipped.", "alerts": [], "ai_source": "skipped"}
+            t7 = threading.Thread(target=_run_l7, daemon=True)
+            t7.start()
+            t7.join(timeout=12)
+            l7 = l7_result[0] or {"headline": "AI report generating in background...", "alerts": [], "ai_source": "pending"}
+            result = _build_result(pid, enriched_holdings, portfolio_markets, prices, l0, l2, l3, l4, l5, l6, l7)
+            computed_cache[pid] = result
+            _compute_jobs[pid] = {"status": "done", "result": result, "error": None}
+            log.info(f"[COMPUTE] Background compute done for {pid}")
+        except Exception as e:
+            log.error(f"[COMPUTE] Background compute failed for {pid}: {e}")
+            _compute_jobs[pid] = {"status": "error", "result": None, "error": str(e)}
+
+    threading.Thread(target=_bg_compute, daemon=True).start()
+
+    # Return immediate response with portfolio info + holdings
+    return jsonify({
+        "status": "computing",
+        "portfolio_id": pid,
+        "computed_at": datetime.now().isoformat(),
+        "engine": "InteliRisk v4.0",
+        "portfolio_info": pf_info,
+        "portfolio_holdings": clean_holdings,
+    })
+
+
+@api.route("/portfolios/<pid>/compute-status")
+@token_required
+def compute_status(pid):
+    """Poll for background compute result."""
+    # If already in computed_cache, return full result
+    if pid in computed_cache:
+        return jsonify({"status": "done", "result": _sanitize(computed_cache[pid])})
+
+    job = _compute_jobs.get(pid)
+    if not job:
+        return jsonify({"status": "not_started"}), 404
+
+    if job["status"] == "running":
+        return jsonify({"status": "computing"})
+
+    if job["status"] == "error":
+        return jsonify({"status": "error", "error": job["error"]}), 500
+
+    # Done — return full result
+    return jsonify({"status": "done", "result": _sanitize(job["result"])})
 
 
 def _compute_all_json(pid, holdings):
@@ -591,7 +689,6 @@ def _compute_all_json(pid, holdings):
     l6 = compute_layer6(prices, holdings, l2_internal=l2i, l3_internal=l3i)
 
     # L7 AI — run with short timeout to avoid blocking
-    import threading
     l7_result = [None]
     def _run_l7():
         try:
@@ -996,8 +1093,8 @@ def portfolio_analytics(pid):
 
     # Use the same _build_portfolio_prices as compute_all for consistency
     pf_prices, holdings, _ = _build_portfolio_prices(holdings)
-    if pf_prices is None or len(pf_prices) < 20:
-        return jsonify({"error": "No stock price data available"}), 404
+    if pf_prices is None or len(pf_prices) < 5:
+        return jsonify({"error": "No stock price data available — ensure portfolio has valid tickers"}), 400
 
     price_df = pf_prices
 
