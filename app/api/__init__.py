@@ -821,18 +821,43 @@ def _compute_all_sse(pid, holdings):
         l6 = compute_layer6(prices, h2, l2_internal=l2i, l3_internal=l3i)
         yield emit("L6")
 
-        # L7 — with short timeout
+        # L7 — AI intelligence with fallback
         import threading
         l7_result = [None]
         def _run_l7():
             try:
                 l7_result[0] = compute_layer7(l0, l2, l3, l4, l5, l6)
             except Exception:
-                l7_result[0] = {"headline": "AI report skipped.", "alerts": [], "ai_source": "skipped"}
+                l7_result[0] = None
         t7 = threading.Thread(target=_run_l7, daemon=True)
         t7.start()
-        t7.join(timeout=12)
-        l7 = l7_result[0] or {"headline": "AI report generating...", "alerts": [], "ai_source": "pending"}
+        t7.join(timeout=35)
+        l7 = l7_result[0]
+        if not l7 or not l7.get("headline"):
+            regime = l4.get("active_regime", "Unknown")
+            score = l5.get("score", 50)
+            level = l5.get("level", "MODERATE")
+            crisis_p = l4.get("crisis_probability", 0)
+            l7 = {
+                "engine": "InteliRisk v4.0 Rule Engine", "ai_source": "rule-engine",
+                "generated_at": datetime.now().isoformat(),
+                "headline": f"Risk score {score:.0f}/100 ({level}). {regime} regime detected. Crisis probability {crisis_p:.0%}.",
+                "score": score, "level": level, "color": l5.get("color", "#C9A227"),
+                "active_regime": regime, "crisis_probability": crisis_p,
+                "regime_forecast": l4.get("forecast", {}), "regime_duration": l4.get("regime_duration", 0),
+                "hmm_features": l4.get("n_features", 0),
+                "dominant_factor": l3.get("dominant_factor", {}),
+                "shock_classification": l3.get("shock_classification", {}).get("current", "MIXED"),
+                "herding": l3.get("herding", {"detected": False, "level": "None", "H_coefficient": 0, "n_stocks": 0}),
+                "diversification": {"hhi": l0.get("herfindahl", 0), "level": l0.get("herfindahl_level", "MODERATE")},
+                "stress_summary": {"worst_scenario": l6.get("worst", "N/A"), "worst_impact": l6.get("worst_impact", 0), "most_vulnerable": [], "n_scenarios": 0},
+                "alerts": _build_basic_alerts(l0, l4, l5),
+                "recommendation": {"posture": "CAUTIOUS" if score > 60 else "BALANCED" if score > 40 else "OPPORTUNISTIC",
+                                   "actions": [f"Monitor {regime} regime transitions", "Review portfolio concentration", "Check factor exposures"]},
+                "country_scores": l5.get("country_scores", l5.get("asset_scores", {})),
+                "ai_narrative": f"Risk score {score:.0f}/100 ({level}) under {regime} regime. The InteliRisk engine has computed all 8 risk layers.",
+                "narrative_sections": [],
+            }
         yield emit("L7")
 
         # Build final result
