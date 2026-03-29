@@ -498,7 +498,7 @@ el('td',{cl:'mn',st:{color:r.variance_pct>20?'var(--ac)':'var(--pu)'}},r.varianc
 el('td',{cl:'mn'},r.cumulative_pct.toFixed(1)+'%'),
 el('td',{st:{fontSize:'8px',color:'var(--t3)'}},topL.slice(0,3).map(l=>l.factor+'('+l.loading.toFixed(2)+')').join(', '))
 );})
-))),
+)),
 el('div',{st:{marginTop:'8px',padding:'8px 10px',background:'var(--b0)',borderRadius:'5px',fontSize:'9px',color:'var(--t3)',lineHeight:'1.6'}},
 'PCA decomposes the 6 macro risk factors into principal components ordered by explanatory power. ',
 el('b',{st:{color:'var(--t2)'}},'Eigenvalue'),': factor importance (>1 = significant). ',
