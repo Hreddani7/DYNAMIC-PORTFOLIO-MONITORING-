@@ -429,8 +429,8 @@ ct.appendChild(el('div',{cl:'g4 mb'},kpi('Mean Vol',p.mean_vol_21d||0,'%','var(-
 ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Market Risk Metrics (InteliRisk: HAR-RV + EVT/GPD + Cornish-Fisher)')),
 el('table',{cl:'dt'},el('thead',null,el('tr',null,...['Market','Vol 21d','Vol 63d','HAR fc','R²','VaR 5%','CVaR','EVT VaR','MaxDD','JB Non-Norm'].map(t=>el('th',null,t)))),
 el('tbody',null,...Object.entries(ms).map(([m,d])=>el('tr',null,el('td',{st:{fontWeight:'500',color:'var(--t1)'}},d.name||m),el('td',{cl:'mn',st:{color:'var(--bl)'}},fmtPct(d.vol_21d)),el('td',{cl:'mn'},fmtPct(d.vol_63d)),el('td',{cl:'mn',st:{color:'var(--pu)'}},fmtPct(d.har_forecast)),el('td',{cl:'mn'},fmt(d.har_r2,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_var,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.current_cvar,3)),el('td',{cl:'mn',st:{color:'var(--rd)'}},fmt(d.evt_var||0,3)),el('td',{cl:'mn',st:{color:'var(--or)'}},fmtPct(d.max_dd)),el('td',null,d.non_normal?'✓ Fat tails':'Normal')))))));
-ct.appendChild(el('div',{cl:'g2'},el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Component VaR')),el('div',{cl:'cc'},el('canvas',{id:'rk1'}))),el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Return Distribution'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'KDE + VaR/CVaR')),el('div',{cl:'cc'},el('canvas',{id:'rk2'})))));
-setTimeout(()=>{const cv=rc.component_var||{};const _nc={};((DT.structural||{}).network||{}).nodes&&(DT.structural.network.nodes||[]).forEach(n=>{_nc[n.id]=n.color;});if(Object.keys(cv).length)mkHBar('rk1',Object.keys(cv).map(k=>(DT.risk_core.market_summary[k]||{}).short||k),Object.values(cv).map(v=>v*100),Object.keys(cv).map(k=>_nc[k]||MARKETS[k]&&MARKETS[k].color||'#5896f0'));const ts=rc.time_series||{};if(ts.returns&&ts.returns.length){
+ct.appendChild(el('div',{cl:'g2'},el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Component VaR'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'Each stock\'s % contribution to total portfolio VaR (5%)')),el('div',{cl:'cc'},el('canvas',{id:'rk1'}))),el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Return Distribution'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'KDE + VaR/CVaR')),el('div',{cl:'cc'},el('canvas',{id:'rk2'})))));
+setTimeout(()=>{const cv=rc.component_var||{};const _nc={};((DT.structural||{}).network||{}).nodes&&(DT.structural.network.nodes||[]).forEach(n=>{_nc[n.id]=n.color;});if(Object.keys(cv).length){const cvKeys=Object.keys(cv).sort((a,b)=>Math.abs(cv[b])-Math.abs(cv[a])).slice(0,12);mkHBar('rk1',cvKeys.map(k=>(DT.risk_core.market_summary[k]||{}).short||k),cvKeys.map(k=>cv[k]),cvKeys.map(k=>_nc[k]||MARKETS[k]&&MARKETS[k].color||'#5896f0'));}const ts=rc.time_series||{};if(ts.returns&&ts.returns.length){
 // Build KDE (Gaussian kernel density estimation) for smooth distribution
 const rets=ts.returns.filter(r=>r!=null&&!isNaN(r));
 const n=rets.length;if(n>10){
@@ -480,7 +480,7 @@ const fpca=(DT.factors||{}).factor_pca||{};
 const fScree=fpca.scree||pc.scree||[];
 ct.appendChild(el('div',{cl:'g2 mb'},
 el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Eigenvalue Scree'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'PCA on 6 macro risk factors — which factor explains most variance')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s3'}))),
-el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Cumulative Variance Explained'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'How many factors needed to explain total risk')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s3b'})))
+el('div',{cl:'cd fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Cumulative Variance Explained'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'Orange = cumulative %, Purple = individual %. Higher = explains more risk')),el('div',{cl:'cc cc-t'},el('canvas',{id:'s3b'})))
 ));
 
 // Factor PCA Decomposition Table
@@ -498,7 +498,16 @@ el('td',{cl:'mn',st:{color:r.variance_pct>20?'var(--ac)':'var(--pu)'}},r.varianc
 el('td',{cl:'mn'},r.cumulative_pct.toFixed(1)+'%'),
 el('td',{st:{fontSize:'8px',color:'var(--t3)'}},topL.slice(0,3).map(l=>l.factor+'('+l.loading.toFixed(2)+')').join(', '))
 );})
-))));
+))),
+el('div',{st:{marginTop:'8px',padding:'8px 10px',background:'var(--b0)',borderRadius:'5px',fontSize:'9px',color:'var(--t3)',lineHeight:'1.6'}},
+'PCA decomposes the 6 macro risk factors into principal components ordered by explanatory power. ',
+el('b',{st:{color:'var(--t2)'}},'Eigenvalue'),': factor importance (>1 = significant). ',
+el('b',{st:{color:'var(--t2)'}},'Variance %'),': how much of total risk this PC explains alone. ',
+el('b',{st:{color:'var(--t2)'}},'Cumulative %'),': total risk explained by this PC and all above it. ',
+'The ',el('b',{st:{color:'var(--ac)'}},'Driver'),' is the macro factor with highest loading on each PC. ',
+scree.length>=3?'The top 3 PCs explain '+scree[2].cumulative_pct.toFixed(0)+'% of total risk — '+
+(scree[2].cumulative_pct>75?'well concentrated.':'spread across multiple factors.'):'')
+));
 }
 
 // PC Time Series
@@ -629,16 +638,17 @@ const topRiskF=frs.length?frs[0]:{};
 ct.appendChild(el('div',{cl:'g4 mb'},kpi('Dominant',dom.label||'—','',dom.zscore>1.5?'var(--rd)':'var(--bl)','z='+(dom.zscore||0).toFixed(2)),kpi('Top Risk',topRiskF.label||'—',topRiskF.pct?topRiskF.pct.toFixed(1)+'%':'','var(--rd)','Highest contribution'),kpi('Shock Type',f.shock_classification?.current||'—','','var(--or)',f.shock_classification?.types?.[f.shock_classification?.current]||''),kpi('Herding',f.herding?.level||'N/A','',f.herding?.sig?'var(--rd)':'var(--gn)','CSAD γ₂<0')));
 
 // Factor Strength Monitor cards
-ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Strength Monitor')),
+ct.appendChild(el('div',{cl:'cd mb fi'},el('div',{cl:'cd-h'},el('span',{cl:'cd-t'},'Factor Strength Monitor'),el('span',{st:{fontSize:'8px',color:'var(--t3)',marginLeft:'6px'}},'Z-scores (\u03c3) — how many std deviations from mean. |z|>1.5 = Elevated, |z|>2 = High stress')),
 el('div',{cl:'g3',st:{gap:'7px'}},...Object.entries(fstr).map(([n,fs])=>{const meta=(f.factor_meta||{})[n]||{};
+const zVal=fs.z_current||fs.z_score||0;
 const stCol=fs.strength==='High'?'var(--rd)':fs.strength==='Elevated'?'var(--or)':fs.strength==='Moderate'?'var(--yl,#C9A227)':'var(--gn)';
 const trendIcon=fs.trend==='increasing'?'\u2191':fs.trend==='decreasing'?'\u2193':'\u2194';
 const trendCol=fs.trend==='increasing'?'var(--rd)':fs.trend==='decreasing'?'var(--gn)':'var(--t3)';
 const riskPct=(cv[n]||{}).risk_pct||0;
 return el('div',{st:{background:'var(--b0)',borderRadius:'6px',padding:'10px',border:'1px solid var(--bd)'}},
 el('div',{cl:'fb',st:{marginBottom:'4px'}},el('span',{st:{fontSize:'8px',color:meta.color||'var(--t3)',textTransform:'uppercase',letterSpacing:'.4px',fontWeight:'600'}},meta.label||n),el('span',{st:{fontSize:'9px',color:stCol,fontWeight:'600'}},fs.strength)),
-el('div',{st:{fontFamily:'JetBrains Mono',fontSize:'18px',fontWeight:'700',color:stCol,marginBottom:'3px'}},(fs.z_current||fs.z_score||0).toFixed(2)),
-bar(Math.abs(fs.z_current||fs.z_score||0)*33,100,stCol),
+el('div',{st:{display:'flex',alignItems:'baseline',gap:'3px',marginBottom:'3px'}},el('span',{st:{fontFamily:'JetBrains Mono',fontSize:'18px',fontWeight:'700',color:stCol}},zVal.toFixed(2)),el('span',{st:{fontSize:'10px',color:'var(--t3)'}},'  \u03c3')),
+bar(Math.abs(zVal)*33,100,stCol),
 el('div',{cl:'fb',st:{marginTop:'4px',fontSize:'8px'}},el('span',{st:{color:trendCol}},trendIcon+' '+fs.trend),el('span',{st:{color:'var(--t3)'}},'Risk: '+riskPct.toFixed(1)+'%'))
 );}))));
 
