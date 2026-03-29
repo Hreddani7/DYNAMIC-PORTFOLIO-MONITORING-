@@ -490,13 +490,21 @@ def compute_layer3(prices, holdings, l2_internal=None):
             f_eigenvalues = fpca.explained_variance_
             f_expl = fpca.explained_variance_ratio_
             f_comps = fpca.components_
-            # Label each PC by the factor with highest absolute loading
+            # Label each PC by the factor with highest absolute loading (unique assignment)
             f_scree = []
             f_pc_labels = []
             cumvar = 0.0
+            used_factors = set()  # Track which factors are already assigned
             for j in range(n_fc):
                 abs_loads = np.abs(f_comps[j])
-                top_idx = int(np.argmax(abs_loads))
+                # Pick the highest-loading factor that hasn't been used yet
+                sorted_idx = np.argsort(abs_loads)[::-1]
+                top_idx = int(sorted_idx[0])
+                for si in sorted_idx:
+                    if int(si) not in used_factors:
+                        top_idx = int(si)
+                        break
+                used_factors.add(top_idx)
                 driver = FACTOR_COLS[top_idx]
                 driver_label = FACTOR_META[driver]["label"]
                 driver_loading = float(f_comps[j, top_idx])
